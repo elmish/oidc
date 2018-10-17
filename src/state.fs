@@ -4,17 +4,17 @@ module Elmish.OIDC.State
 open Types
 open Elmish
 
-let init (cmd:Commands<_>) (jwt:string option) =
+let init (cmd:Commands<_>) (hash:string option) =
     let model = 
-        match jwt with
-        | Some jwt -> Callback jwt
+        match hash with
+        | Some hash -> Callback hash
         | _ -> Resuming
     model, cmd.loadNonce()
 
 let update (cmd:Commands<_>) (mkStatus:Status<_>) model msg =
     match model, msg with
-    | Callback jwt, NonceLoaded nonce -> 
-        NewSession nonce, cmd.parseToken jwt
+    | Callback hash, NonceLoaded nonce -> 
+        NewSession nonce, cmd.parseToken hash
 
     | Resuming, NonceLoaded nonce -> 
         NewSession nonce, cmd.loadToken()
@@ -56,7 +56,7 @@ let update (cmd:Commands<_>) (mkStatus:Status<_>) model msg =
 let internal NonceKey = "oidc:nonce"
 
 [<Literal>]
-let internal JwtKey = "oidc:token"
+let internal TokenKey = "oidc:token"
 
 /// Default constructor for `init` and `update` functions, and `Commands` API.
 /// authority: Base URL for the oAuth2/OIDC authority
@@ -88,7 +88,7 @@ let mkDefault
             Cmd.ofFunc
                 (fun _ -> 
                     Storage.clear NonceKey
-                    Storage.clear JwtKey)
+                    Storage.clear TokenKey)
                 ()
                 (fun _ -> LoggedOut)
                 (mkStatus.failure >> Status)
@@ -103,13 +103,13 @@ let mkDefault
                 (mkStatus.failure >> Status)
 
           loadToken = fun _ ->
-            Cmd.ofFunc (Storage.Token.get Token.parse) JwtKey (ofTokenResult Token) (mkStatus.failure >> Status) 
+            Cmd.ofFunc (Storage.Token.get Token.parse) TokenKey (ofTokenResult Token) (mkStatus.failure >> Status) 
 
           storeToken = fun token -> 
-            Cmd.attemptFunc (Storage.Token.set Token.concat JwtKey) token (mkStatus.failure >> Status) 
+            Cmd.attemptFunc (Storage.Token.set Token.concat TokenKey) token (mkStatus.failure >> Status) 
 
-          parseToken = fun jwt ->
-            Cmd.ofFunc Token.parse jwt (ofTokenResult Token) (mkStatus.failure >> Status)
+          parseToken = fun hash ->
+            Cmd.ofFunc Token.parse hash (ofTokenResult Token) (mkStatus.failure >> Status)
 
           validateToken = fun nonce token ->
             Cmd.ofFunc (Token.validate System.DateTime.Now nonce) token (ofTokenResult ValidToken) (mkStatus.failure >> Status) 

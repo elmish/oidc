@@ -5,8 +5,8 @@ module Elmish.OIDC.Types
 type Nonce = Nonce of string
 type State = State of string
 
-/// OIDC Token
-type JWT =
+/// Authorization response token
+type Token =
     { idToken: string
       accessToken: string
       tokenType: string
@@ -23,8 +23,8 @@ type Model<'info> =
     | NewSession of Nonce
     | Validating
     | Unauthenticated
-    | Validated of JWT
-    | InfoLoaded of JWT * userInfo: 'info
+    | Validated of Token
+    | InfoLoaded of Token * userInfo: 'info
 
 /// Component message type
 /// 'status: opaque type for external handling of status 
@@ -36,8 +36,8 @@ type Msg<'status,'info> =
     | LogOut
     | LoggedOut
     | NoNonce
-    | Token of JWT
-    | ValidToken of JWT
+    | Token of Token
+    | ValidToken of Token
     | TokenError of TokenError
     | UserInfo of 'info
     | UserInfoError of exn
@@ -51,13 +51,13 @@ and TokenError =
 
 /// Commands used by `init` and `update`
 type Commands<'msg> =
-    { getInfo: JWT -> Elmish.Cmd<'msg>
+    { getInfo: Token -> Elmish.Cmd<'msg>
       login: State -> Elmish.Cmd<'msg>
       logout: unit -> Elmish.Cmd<'msg>
       loadToken: unit -> Elmish.Cmd<'msg>
-      storeToken: JWT -> Elmish.Cmd<'msg>
+      storeToken: Token -> Elmish.Cmd<'msg>
       parseToken: string -> Elmish.Cmd<'msg>
-      validateToken: Nonce -> JWT -> Elmish.Cmd<'msg>
+      validateToken: Nonce -> Token -> Elmish.Cmd<'msg>
       loadNonce: unit -> Elmish.Cmd<'msg> }
 
 /// Constructors for building 'status instances
