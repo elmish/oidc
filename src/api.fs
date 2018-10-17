@@ -116,5 +116,5 @@ module internal Authority =
         let login (opt:Options) (State state) (Nonce nonce) redirectTo = 
             Fable.Import.Browser.window.location.href <-
                 sprintf "%s/connect/authorize?client_id=%s&response_type=%s&scope=%s&nonce=%s&state=%s&redirect_uri=%s"
-                    opt.authority opt.clientId opt.responseType opt.scopes nonce state (Fable.Import.JS.encodeURI redirectTo)
+                    opt.authority opt.clientId opt.responseType opt.scopes nonce state (Fable.Import.JS.encodeURIComponent redirectTo)
 
