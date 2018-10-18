@@ -1,64 +1,64 @@
 [<AutoOpen>]
 module Elmish.OIDC.Types
 
-/// Secure nonce string
-type Nonce = Nonce of string
+/// Secure state string
 type State = State of string
+/// JWT string
+type JWT = JWT of string
 
-/// Authorization response token
-type Token =
-    { idToken: string
-      accessToken: string
+/// Authorization response
+type AuResponse =
+    { idToken: JWT
+      accessToken: JWT
       tokenType: string
-      expiresIn: string
+      expires: System.DateTime
       scope: string
-      state: string
+      state: State
       error: string
-      nonce: Nonce
       errorDesc: string } 
 
 type Model<'info> =
     | Resuming
     | Callback of string
-    | NewSession of Nonce
+    | NewSession of State
     | Validating
     | Unauthenticated
-    | Validated of Token
-    | InfoLoaded of Token * userInfo: 'info
+    | Validated of AuResponse
+    | InfoLoaded of AuResponse * userInfo: 'info
 
 /// Component message type
 /// 'status: opaque type for external handling of status 
 /// 'info: opaque type for external handling of user info
 type Msg<'status,'info> =
     | Status of 'status
-    | NonceLoaded of Nonce
-    | LogIn of State
+    | LogIn
     | LogOut
     | LoggedOut
-    | NoNonce
-    | Token of Token
-    | ValidToken of Token
-    | TokenError of TokenError
+    | StateLoaded of State
+    | NoState
+    | Response of AuResponse
+    | ValidToken of AuResponse
+    | ResponseError of ResponseError
     | UserInfo of 'info
     | UserInfoError of exn
 
-and TokenError =
-    | NoToken
+and ResponseError =
+    | NoResponse
     | ParsingError of exn
-    | InvalidNonce
+    | InvalidState
     | Expired
     | ServerError of string * string
 
 /// Commands used by `init` and `update`
 type Commands<'msg> =
-    { getInfo: Token -> Elmish.Cmd<'msg>
-      login: State -> Elmish.Cmd<'msg>
+    { getInfo: AuResponse -> Elmish.Cmd<'msg>
+      login: unit -> Elmish.Cmd<'msg>
       logout: unit -> Elmish.Cmd<'msg>
-      loadToken: unit -> Elmish.Cmd<'msg>
-      storeToken: Token -> Elmish.Cmd<'msg>
-      parseToken: string -> Elmish.Cmd<'msg>
-      validateToken: Nonce -> Token -> Elmish.Cmd<'msg>
-      loadNonce: unit -> Elmish.Cmd<'msg> }
+      loadResponse: unit -> Elmish.Cmd<'msg>
+      storeResponse: AuResponse -> Elmish.Cmd<'msg>
+      parseResponse: string -> Elmish.Cmd<'msg>
+      validateResponse: State -> AuResponse -> Elmish.Cmd<'msg>
+      loadState: unit -> Elmish.Cmd<'msg> }
 
 /// Constructors for building 'status instances
 type Status<'status> = 
@@ -71,5 +71,5 @@ type Options =
     { responseType: string
       authority: string
       clientId: string
-      scopes: string }
+      scopes: string list }
 

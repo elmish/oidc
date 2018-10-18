@@ -9,41 +9,41 @@ let init (cmd:Commands<_>) (hash:string option) =
         match hash with
         | Some hash -> Callback hash
         | _ -> Resuming
-    model, cmd.loadNonce()
+    model, cmd.loadState()
 
 let update (cmd:Commands<_>) (mkStatus:Status<_>) model msg =
     match model, msg with
-    | Callback hash, NonceLoaded nonce -> 
-        NewSession nonce, cmd.parseToken hash
+    | Callback hash, StateLoaded state -> 
+        NewSession state, cmd.parseResponse hash
 
-    | Resuming, NonceLoaded nonce -> 
-        NewSession nonce, cmd.loadToken()
+    | Resuming, StateLoaded state -> 
+        NewSession state, cmd.loadResponse()
 
-    | NewSession nonce, Token token -> 
-        Validating, cmd.validateToken nonce token 
+    | NewSession state, Response response -> 
+        Validating, cmd.validateResponse state response 
 
-    | Validating, Token token ->
-        Validated token,
-        Cmd.batch [ cmd.storeToken token
-                    cmd.getInfo token ]
+    | Validating, Response response ->
+        Validated response,
+        Cmd.batch [ cmd.storeResponse response
+                    cmd.getInfo response ]
 
-    | Validated token, UserInfo info ->
-        InfoLoaded (token,info), Cmd.none
+    | Validated response, UserInfo info ->
+        InfoLoaded (response,info), Cmd.none
 
-    | _, LogIn state ->
-        Unauthenticated, cmd.login state
+    | _, LogIn ->
+        Unauthenticated, cmd.login()
     
     | _, LogOut ->
         Unauthenticated, cmd.logout()
 
-    | _, NoNonce
+    | _, NoState
     | _, LoggedOut -> 
         Unauthenticated, Cmd.none
 
     | _, UserInfoError _ ->
         model, Cmd.none
 
-    | _, TokenError _ -> 
+    | _, ResponseError _ -> 
         Unauthenticated, Cmd.none
 
     | _, Status _ -> 
@@ -53,15 +53,13 @@ let update (cmd:Commands<_>) (mkStatus:Status<_>) model msg =
         model, Cmd.ofMsg (sprintf "Invalid operation: %A (in %A state)" msg model |> mkStatus.warn |> Status)
 
 [<Literal>]
-let internal NonceKey = "oidc:nonce"
+let internal StateKey = "oidc:state"
 
 [<Literal>]
-let internal TokenKey = "oidc:token"
+let internal ResponseKey = "oidc:response"
 
 /// Default constructor for `init` and `update` functions, and `Commands` API.
-/// authority: Base URL for the oAuth2/OIDC authority
-/// clientId: the app id known to the authority
-/// scopes: scopes to request
+/// options: oAuth2/OIDC authorization options
 /// mkStatus: constructors for Status messages
 /// infoDecoder: Thoth.Json decoder for your 'info type
 let mkDefault 
@@ -72,49 +70,51 @@ let mkDefault
            * (Model<'info> -> Msg<'status,'info> -> Model<'info>*Cmd<Msg<'status,'info>>)
            * Commands<Msg<'status,'info>> =
     
-    let ofTokenResult ok r = 
+    let ofResponseResult ok r = 
         match r with
-        | Ok token -> ok token
-        | Error err -> TokenError err
-    let ofNonceOption r = 
+        | Ok response -> ok response
+        | Error err -> ResponseError err
+
+    let ofStateOption r = 
         match r with
-        | Some nonce -> NonceLoaded nonce
-        | _ -> NoNonce
+        | Some state -> StateLoaded state
+        | _ -> NoState
+    
     let cmd =
-        { getInfo = fun token -> 
-            Cmd.ofPromise (Authority.Info.get infoDecoder opt.authority) token UserInfo UserInfoError 
+        { getInfo = fun response -> 
+            Cmd.ofPromise (Authority.Info.get infoDecoder opt.authority) response UserInfo UserInfoError 
 
           logout = fun _ -> 
             Cmd.ofFunc
                 (fun _ -> 
-                    Storage.clear NonceKey
-                    Storage.clear TokenKey)
+                    Storage.clear StateKey
+                    Storage.clear ResponseKey)
                 ()
                 (fun _ -> LoggedOut)
                 (mkStatus.failure >> Status)
 
-          login = fun state -> 
+          login = fun _ -> 
             Cmd.attemptFunc 
                 (fun location ->
-                    let nonce = Token.nextNonce()
-                    Storage.Nonce.set NonceKey nonce
-                    Authority.Id.login opt state nonce location)
+                    let state = Response.nextState()
+                    Storage.State.set StateKey state
+                    Authority.Id.login opt state location)
                 Fable.Import.Browser.window.location.href
                 (mkStatus.failure >> Status)
 
-          loadToken = fun _ ->
-            Cmd.ofFunc (Storage.Token.get Token.parse) TokenKey (ofTokenResult Token) (mkStatus.failure >> Status) 
+          loadResponse = fun _ ->
+            Cmd.ofFunc (Storage.Response.get Response.parse) ResponseKey (ofResponseResult Response) (mkStatus.failure >> Status) 
 
-          storeToken = fun token -> 
-            Cmd.attemptFunc (Storage.Token.set Token.concat TokenKey) token (mkStatus.failure >> Status) 
+          storeResponse = fun response -> 
+            Cmd.attemptFunc (Storage.Response.set Response.concat ResponseKey) response (mkStatus.failure >> Status) 
 
-          parseToken = fun hash ->
-            Cmd.ofFunc Token.parse hash (ofTokenResult Token) (mkStatus.failure >> Status)
+          parseResponse = fun hash ->
+            Cmd.ofFunc Response.parse hash (ofResponseResult Response) (mkStatus.failure >> Status)
 
-          validateToken = fun nonce token ->
-            Cmd.ofFunc (Token.validate System.DateTime.Now nonce) token (ofTokenResult ValidToken) (mkStatus.failure >> Status) 
+          validateResponse = fun state response ->
+            Cmd.ofFunc (Response.validate System.DateTime.Now state) response (ofResponseResult ValidToken) (mkStatus.failure >> Status) 
 
-          loadNonce = fun _ ->
-            Cmd.ofFunc Storage.Nonce.get NonceKey ofNonceOption (mkStatus.failure >> Status) }
+          loadState = fun _ ->
+            Cmd.ofFunc Storage.State.get StateKey ofStateOption (mkStatus.failure >> Status) }
     
     init cmd, update cmd mkStatus, cmd    

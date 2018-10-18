@@ -10,29 +10,29 @@ module internal Storage =
     let clear key = 
         Browser.sessionStorage.removeItem key
 
-    module Token =
-        let get (ofStr:string->Result<Token,TokenError>) key = 
+    module Response =
+        let get (ofStr:string->Result<AuResponse,ResponseError>) key = 
             Browser.sessionStorage.getItem key
             |> unbox<string>
             |> Option.ofObj
-            |> function Some str -> ofStr str | _ -> Error NoToken
+            |> function Some str -> ofStr str | _ -> Error NoResponse
         
-        let set (toStr:Token->string) key token =
-            Browser.sessionStorage.setItem(key, toStr token)
+        let set (toStr:AuResponse->string) key response =
+            Browser.sessionStorage.setItem(key, toStr response)
 
-    module Nonce =
-        let set key (Nonce v) =
+    module State =
+        let set key (State v) =
             Browser.sessionStorage.setItem(key, v)
 
         let get key = 
             Browser.sessionStorage.getItem key
             |> unbox<string>
             |> Option.ofObj
-            |> Option.map Nonce
+            |> Option.map State
 
-/// APIs for working with Token tokens and Nonces
+/// APIs for working with Response tokens and Nonces
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal Token =
+module internal Response =
     open Fable.Core.JsInterop
     open Fable.PowerPack.Result
 
@@ -42,58 +42,59 @@ module internal Token =
         Fable.Import.Browser.window.crypto?getRandomValues(bytes)
         bytes |> Array.map (fun b -> charset.[(int b) % charset.Length]) |> System.String |> string
 
-    let nextNonce () = 
-        randomString 16 |> Nonce
+    let nextState () = 
+        randomString 16 |> State
 
-    let concat (token:Token) = 
-        let (Nonce nonce) = token.nonce
-        [| token.idToken, "id_token"
-           token.accessToken,"access_token"
-           token.tokenType,"token_type"
-           token.expiresIn,"expires_in"
-           token.scope,"scope"
-           token.state,"state"
-           token.error,"error"
-           nonce,"nonce"
-           token.errorDesc,"error_description" |]
+    let concat (response:AuResponse) = 
+        let (State state) = response.state
+        let (JWT accessToken) = response.accessToken
+        let (JWT idToken) = response.idToken
+        [| idToken, "id_token"
+           accessToken,"access_token"
+           response.tokenType,"token_type"
+           (string response.expires),"expires_at"
+           response.scope,"scope"
+           state,"state"
+           response.error,"error"
+           response.errorDesc,"error_description" |]
         |> Array.fold (fun s (v,k) -> sprintf "%s&%s=%s" s k v) ""
     
-    let parse (hash:string) : Result<Token,TokenError> =
+    let parse (hash:string) : Result<AuResponse,ResponseError> =
         let tokenize (str: string) = 
             match str.Split('=') with 
             | [| key; value |] -> (key,value) 
             | _ -> failwithf "Unable to parse: %s" str
         try
-            let tokenComponents =
+            let xs =
                 hash.Split([|'&'|], StringSplitOptions.RemoveEmptyEntries)
                 |> Array.map tokenize |> dict
-            Ok { idToken = tokenComponents.["id_token"]
-                 accessToken = tokenComponents.["access_token"]
-                 tokenType = tokenComponents.["token_type"]
-                 expiresIn = tokenComponents.["expires_in"]
-                 scope = tokenComponents.["scope"]
-                 state = tokenComponents.["state"]
-                 error = tokenComponents.["error"]
-                 nonce = Nonce tokenComponents.["nonce"]
-                 errorDesc = tokenComponents.["error_description"] }
+            Ok { idToken = JWT xs.["id_token"]
+                 accessToken = JWT xs.["access_token"]
+                 tokenType = xs.["token_type"]
+                 expires = match xs.TryGetValue "expires_in" with 
+                           | true,s ->  DateTime.Now + TimeSpan.FromSeconds(float s)
+                           | _ -> (DateTime.Parse xs.["expires_at"])
+                 scope = xs.["scope"]
+                 state = State xs.["state"]
+                 error = xs.["error"]
+                 errorDesc = xs.["error_description"] }
         with ex -> 
             Error (ParsingError ex)
 
-    let serverOk (token:Token) =
-        if System.String.IsNullOrEmpty token.error then Ok token else Error (ServerError (token.error,token.errorDesc))
+    let serverOk (response:AuResponse) =
+        if System.String.IsNullOrEmpty response.error then Ok response else Error (ServerError (response.error,response.errorDesc))
 
-    let expiryOk now (token:Token) = 
-        if System.DateTime.Parse token.expiresIn < now then Ok token else Error Expired
+    let expiryOk now (response:AuResponse) = 
+        if response.expires < now then Ok response else Error Expired
 
-    let nonceOk nonce (token:Token) =
-        if nonce = token.nonce then Ok token else Error InvalidNonce
+    let stateOk state (response:AuResponse) =
+        if state = response.state then Ok response else Error InvalidState
 
-    let validate now nonce (token:Token) =
+    let validate now nonce (response:AuResponse) =
         result {
-            // TODO: check signature
-            let! ok = token |> serverOk
+            let! ok = response |> serverOk
             let! ok = ok |> expiryOk now
-            let! ok = ok |> nonceOk nonce // TODO: use nonce from returned claims
+            let! ok = ok |> stateOk nonce
             return ok
         }
 
@@ -107,15 +108,17 @@ module internal Authority =
           HttpRequestHeaders.ContentType "application/json" ]
 
     module Info =
-        let get decoder url (token:Token) : Promise<'info> =
+        let get decoder url (response:AuResponse) : Promise<'info> =
+            let (JWT token) = response.accessToken
             fetchAs<'info> (url+"/connect/userinfo")
                            decoder
-                           [ requestHeaders (authenticatedJsonHeaders token.accessToken)
+                           [ requestHeaders (authenticatedJsonHeaders token)
                              RequestProperties.Method HttpMethod.GET ]
 
     module Id =
-        let login (opt:Options) (State state) (Nonce nonce) redirectTo = 
+        let login (opt:Options) (State state) redirectTo =
+            let scopes = opt.scopes |> List.reduce (fun x y -> x + " " + y)
             Fable.Import.Browser.window.location.href <-
                 sprintf "%s/connect/authorize?client_id=%s&response_type=%s&scope=%s&nonce=%s&state=%s&redirect_uri=%s"
-                    opt.authority opt.clientId opt.responseType opt.scopes nonce state (Fable.Import.JS.encodeURIComponent redirectTo)
+                    opt.authority opt.clientId opt.responseType scopes state state (Fable.Import.JS.encodeURIComponent redirectTo)
 
