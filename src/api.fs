@@ -85,7 +85,7 @@ module internal Response =
         if System.String.IsNullOrEmpty response.error then Ok response else Error (ServerError (response.error,response.errorDesc))
 
     let expiryOk now (response:AuResponse) = 
-        if response.expires < now then Ok response else Error Expired
+        if response.expires > now then Ok response else Error Expired
 
     let stateOk state (response:AuResponse) =
         if state = response.state then Ok response else Error InvalidState
