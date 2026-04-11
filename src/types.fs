@@ -1,75 +1,112 @@
 [<AutoOpen>]
 module Elmish.OIDC.Types
 
-/// Secure state string
-type State = State of string
-/// JWT string
-type JWT = JWT of string
+open System
 
-/// Authorization response
-type AuResponse =
-    { idToken: JWT
-      accessToken: JWT
+type Options =
+    { clientId: string
+      authority: string
+      scopes: string list
+      redirectUri: string
+      postLogoutRedirectUri: string option
+      silentRedirectUri: string option
+      renewBeforeExpirySeconds: int
+      clockSkewSeconds: int
+      allowedAlgorithms: string list }
+
+type DiscoveryDocument =
+    { issuer: string
+      authorizationEndpoint: string
+      tokenEndpoint: string
+      userinfoEndpoint: string
+      jwksUri: string
+      endSessionEndpoint: string option }
+
+type JwksKey =
+    { kty: string
+      kid: string
+      n: string
+      e: string
+      alg: string
+      ``use``: string }
+
+type Jwks =
+    { keys: JwksKey list }
+
+type JwtHeader =
+    { alg: string
+      kid: string }
+
+type JwtPayload =
+    { iss: string
+      sub: string
+      aud: string list
+      exp: int64
+      iat: int64
+      nonce: string option }
+
+type TokenResponse =
+    { accessToken: string
+      idToken: string
       tokenType: string
-      expires: System.DateTime
+      expiresIn: int
+      scope: string }
+
+type AuthState =
+    { state: string
+      nonce: string
+      codeVerifier: string
+      redirectUri: string }
+
+type OidcError =
+    | DiscoveryError of exn
+    | IssuerMismatch of expected:string * actual:string
+    | InvalidState
+    | TokenExchangeFailed of string
+    | InvalidToken of string
+    | Expired
+    | ServerError of error:string * description:string
+    | NetworkError of exn
+
+type Session<'info> =
+    { accessToken: string
+      idToken: string
+      tokenType: string
+      expiresAt: DateTimeOffset
       scope: string
-      state: State
-      error: string
-      errorDesc: string } 
+      claims: JwtPayload
+      userInfo: 'info option }
+
+type ReadyState<'info> =
+    | ProcessingCallback of code:string * state:string
+    | ExchangingCode
+    | ValidatingToken
+    | Unauthenticated
+    | Redirecting
+    | Authenticated of Session<'info>
+    | Renewing of Session<'info>
 
 type Model<'info> =
-    | Resuming
-    | Callback of string
-    | NewSession of State
-    | Validating
-    | Unauthenticated
-    | Validated of AuResponse
-    | InfoLoaded of AuResponse * userInfo: 'info
+    | Initializing
+    | Ready of DiscoveryDocument * Jwks * ReadyState<'info>
+    | Failed of OidcError
 
-/// Component message type
-/// 'status: opaque type for external handling of status 
-/// 'info: opaque type for external handling of user info
-type Msg<'status,'info> =
-    | Status of 'status
+type Msg<'info> =
+    | DiscoveryLoaded of DiscoveryDocument
+    | DiscoveryFailed of exn
+    | JwksLoaded of Jwks
+    | JwksFailed of exn
+    | AuthCallback of code:string * state:string
+    | TokenReceived of TokenResponse
+    | TokenValidated of JwtPayload * TokenResponse
+    | ValidationFailed of OidcError
+    | UserInfo of 'info
+    | UserInfoFailed of exn
+    | SilentRenewResult of Result<(JwtPayload * TokenResponse), OidcError>
     | LogIn
     | LogOut
     | LoggedOut
-    | StateLoaded of State
-    | NoState
-    | Response of AuResponse
-    | ValidToken of AuResponse
-    | ResponseError of ResponseError
-    | UserInfo of 'info
-    | UserInfoError of exn
-
-and ResponseError =
-    | NoResponse
-    | ParsingError of exn
-    | InvalidState
-    | Expired
-    | ServerError of string * string
-
-/// Commands used by `init` and `update`
-type Commands<'msg> =
-    { getInfo: AuResponse -> Elmish.Cmd<'msg>
-      login: unit -> Elmish.Cmd<'msg>
-      logout: unit -> Elmish.Cmd<'msg>
-      loadResponse: unit -> Elmish.Cmd<'msg>
-      storeResponse: AuResponse -> Elmish.Cmd<'msg>
-      parseResponse: string -> Elmish.Cmd<'msg>
-      validateResponse: State -> AuResponse -> Elmish.Cmd<'msg>
-      loadState: unit -> Elmish.Cmd<'msg> }
-
-/// Constructors for building 'status instances
-type Status<'status> = 
-    { info: string -> 'status
-      warn: string -> 'status
-      failure: exn -> 'status }
-
-/// Authentication Options 
-type Options = 
-    { responseType: string
-      authority: string
-      clientId: string
-      scopes: string list }
+    | SessionRestored of TokenResponse
+    | NoSession
+    | Tick
 

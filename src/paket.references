@@ -1,4 +1,5 @@
 FSharp.Core
 Fable.Core
-Fable.PowerPack
 Fable.Elmish
+Fable.Browser.Dom
+Thoth.Json

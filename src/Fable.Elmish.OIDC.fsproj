@@ -4,8 +4,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="types.fs" />
-    <Compile Include="api.fs" />
+    <Compile Include="crypto.fs" />
+    <Compile Include="discovery.fs" />
+    <Compile Include="token.fs" />
+    <Compile Include="storage.fs" />
+    <Compile Include="renewal.fs" />
     <Compile Include="state.fs" />
+    <Compile Include="api.fs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="*.fsproj; *.fs" PackagePath="fable\" />
