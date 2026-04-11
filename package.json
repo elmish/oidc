@@ -1,0 +1,13 @@
+{
+    "name": "fable-elmish-oidc",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test": "dotnet tool restore && dotnet fable tests/Tests.fsproj -o tests/out && npx mocha --require global-jsdom/register tests/out/Main.js"
+    },
+    "devDependencies": {
+        "global-jsdom": "^29.0.0",
+        "jsdom": "^29.0.2",
+        "mocha": "^10.8.2"
+    }
+}

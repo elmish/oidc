@@ -2,13 +2,9 @@
 module Elmish.OIDC.Discovery
 
 open Fable.Core
-open Fable.Core.JsInterop
 open Thoth.Json
 
-[<Emit("fetch($0)")>]
-let private fetch (url: string) : JS.Promise<obj> = jsNative
-
-let private discoveryDecoder : Decode.Decoder<DiscoveryDocument> =
+let private discoveryDecoder : Decoder<DiscoveryDocument> =
     Decode.object (fun get ->
         { issuer = get.Required.Field "issuer" Decode.string
           authorizationEndpoint = get.Required.Field "authorization_endpoint" Decode.string
@@ -21,8 +17,8 @@ let fetchDiscovery (authority: string) : JS.Promise<DiscoveryDocument> =
     let authority = authority.TrimEnd('/')
     let url = authority + "/.well-known/openid-configuration"
 
-    fetch url
-    |> Promise.bind (fun response -> response?text() : JS.Promise<string>)
+    Interop.Http.get url
+    |> Promise.bind (fun response -> response.text())
     |> Promise.map (fun text ->
         match Decode.fromString discoveryDecoder text with
         | Ok doc ->

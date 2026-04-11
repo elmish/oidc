@@ -1,4 +1,4 @@
-module Elmish.OIDC
+namespace Elmish.OIDC
 
 open Fable.Core
 open Elmish

@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="types.fs" />
+    <Compile Include="interop.fs" />
     <Compile Include="crypto.fs" />
     <Compile Include="discovery.fs" />
     <Compile Include="token.fs" />
@@ -15,5 +16,13 @@
   <ItemGroup>
     <Content Include="*.fsproj; *.fs" PackagePath="fable\" />
   </ItemGroup>
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Fable.Core" />
+    <PackageReference Include="Fable.Elmish" />
+    <PackageReference Include="Fable.Browser.Dom" />
+    <PackageReference Include="Fable.Fetch" />
+    <PackageReference Include="Fable.Promise" />
+    <PackageReference Include="Thoth.Json" />
+  </ItemGroup>
 </Project>

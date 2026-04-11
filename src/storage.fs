@@ -1,7 +1,6 @@
 [<AutoOpen>]
 module Elmish.OIDC.Storage
 
-open Fable.Core.JsInterop
 open Thoth.Json
 
 type IStorage =
@@ -9,31 +8,18 @@ type IStorage =
     abstract setItem: string -> string -> unit
     abstract removeItem: string -> unit
 
-let SessionStorage =
+let private makeStorage (storage: Browser.Types.Storage) =
     { new IStorage with
         member _.getItem key =
-            let storage = Browser.Dom.window?sessionStorage
-            let value: string = storage?getItem(key)
-            if isNullOrUndefined value then None else Some value
+            storage.[key] |> Option.ofObj
         member _.setItem key value =
-            let storage = Browser.Dom.window?sessionStorage
-            storage?setItem(key, value)
+            storage.[key] <- value
         member _.removeItem key =
-            let storage = Browser.Dom.window?sessionStorage
-            storage?removeItem(key) }
+            storage.removeItem key }
 
-let LocalStorage =
-    { new IStorage with
-        member _.getItem key =
-            let storage = Browser.Dom.window?localStorage
-            let value: string = storage?getItem(key)
-            if isNullOrUndefined value then None else Some value
-        member _.setItem key value =
-            let storage = Browser.Dom.window?localStorage
-            storage?setItem(key, value)
-        member _.removeItem key =
-            let storage = Browser.Dom.window?localStorage
-            storage?removeItem(key) }
+let SessionStorage = makeStorage Browser.Dom.window.sessionStorage
+
+let LocalStorage = makeStorage Browser.Dom.window.localStorage
 
 [<Literal>]
 let AuthStateKey = "oidc:auth_state"
