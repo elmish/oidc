@@ -1,28 +1,64 @@
 namespace Elmish.OIDC
 
-open Fable.Core
 open Elmish
 
 module Oidc =
 
-    let init (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
-        State.init opts SessionStorage
+    let createBrowserPlatform () : Platform =
+        let platform =
+            { crypto = BrowserCrypto
+              encoding = BrowserEncoding
+              http = BrowserHttp
+              navigation = BrowserNavigation
+              renewal = Unchecked.defaultof<IRenewalStrategy>
+              storage = BrowserSessionStorage
+              timer = BrowserTimer }
+        { platform with renewal = BrowserRenewal platform }
 
-    let initWith (opts: Options) (storage: IStorage) : Model<'info> * Cmd<Msg<'info>> =
-        State.init opts storage
+    let createBrowserPlatformWith (storage: IStorage) : Platform =
+        let platform =
+            { crypto = BrowserCrypto
+              encoding = BrowserEncoding
+              http = BrowserHttp
+              navigation = BrowserNavigation
+              renewal = Unchecked.defaultof<IRenewalStrategy>
+              storage = storage
+              timer = BrowserTimer }
+        { platform with renewal = BrowserRenewal platform }
 
-    let update (opts: Options) (getUserInfo: string -> string -> JS.Promise<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
-        State.update opts SessionStorage getUserInfo msg model
+    // Platform-aware API
 
-    let updateWith (opts: Options) (storage: IStorage) (getUserInfo: string -> string -> JS.Promise<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
-        State.update opts storage getUserInfo msg model
+    let initPlatform (platform: Platform) (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
+        State.init platform opts
 
-    let subscribe (model: Model<'info>) : Sub<Msg<'info>> =
+    let updatePlatform (platform: Platform) (opts: Options) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
+        State.update platform opts getUserInfo msg model
+
+    let subscribePlatform (platform: Platform) (model: Model<'info>) : Sub<Msg<'info>> =
         match model with
         | Ready (_, _, Authenticated _)
         | Ready (_, _, Renewing _) ->
-            [ ["oidc"; "renewal"], tokenExpirySubscription ]
+            [ ["oidc"; "renewal"], tokenExpirySubscription platform.timer ]
         | _ -> []
+
+    // Browser convenience API (backward compat)
+
+    let init (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
+        initPlatform (createBrowserPlatform ()) opts
+
+    let initWith (opts: Options) (storage: IStorage) : Model<'info> * Cmd<Msg<'info>> =
+        initPlatform (createBrowserPlatformWith storage) opts
+
+    let update (opts: Options) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
+        updatePlatform (createBrowserPlatform ()) opts getUserInfo msg model
+
+    let updateWith (opts: Options) (storage: IStorage) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
+        updatePlatform (createBrowserPlatformWith storage) opts getUserInfo msg model
+
+    let subscribe (model: Model<'info>) : Sub<Msg<'info>> =
+        subscribePlatform (createBrowserPlatform ()) model
+
+    // Model query helpers (platform-independent)
 
     let tryGetSession (model: Model<'info>) : Session<'info> option =
         match model with

@@ -2,6 +2,7 @@ module Tests.Helpers
 
 open Elmish.OIDC.Types
 open Elmish.OIDC.Storage
+open Elmish.OIDC.Browser
 open Fable.Core
 open Fable.Core.JsInterop
 open Thoth.Json
@@ -37,9 +38,20 @@ let testDiscoveryDoc : DiscoveryDocument =
       jwksUri = "https://auth.example.com/.well-known/jwks.json"
       endSessionEndpoint = Some "https://auth.example.com/logout" }
 
+let testPlatform (storage: IStorage) : Platform =
+    let platform =
+        { crypto = BrowserCrypto
+          encoding = BrowserEncoding
+          http = BrowserHttp
+          navigation = BrowserNavigation
+          renewal = Unchecked.defaultof<IRenewalStrategy>
+          storage = storage
+          timer = BrowserTimer }
+    { platform with renewal = Elmish.OIDC.Renewal.BrowserRenewal platform }
+
 let jsonToBase64Url (json: string) : string =
     let bytes : byte[] = Fable.Core.JsInterop.emitJsExpr json "new TextEncoder().encode($0)"
-    Elmish.OIDC.Crypto.base64UrlEncode bytes
+    Elmish.OIDC.Crypto.base64UrlEncode BrowserEncoding bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

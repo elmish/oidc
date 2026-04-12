@@ -1,38 +1,32 @@
 [<AutoOpen>]
 module Elmish.OIDC.Crypto
 
-open Fable.Core
-
-let base64UrlEncode (bytes: byte[]) : string =
-    Interop.Encoding.btoaFromBytes bytes
+let base64UrlEncode (encoding: IEncodingProvider) (bytes: byte[]) : string =
+    encoding.base64Encode bytes
     |> fun s -> s.Replace('+', '-').Replace('/', '_').TrimEnd('=')
 
-let base64UrlDecode (s: string) : byte[] =
+let base64UrlDecode (encoding: IEncodingProvider) (s: string) : byte[] =
     let padded =
         let r = s.Length % 4
         if r = 0 then s
         else s + System.String('=', 4 - r)
     padded.Replace('-', '+').Replace('_', '/')
-    |> Interop.Encoding.atobToBytes
+    |> encoding.base64Decode
 
-let randomBytes (len: int) : byte[] =
-    let buf = Array.zeroCreate<byte> len
-    Interop.Crypto.getRandomValues buf |> ignore
-    buf
+let randomBytes (crypto: ICryptoProvider) (len: int) : byte[] =
+    crypto.randomBytes len
 
-let generateState () : string =
-    randomBytes 32 |> base64UrlEncode
+let generateState (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+    randomBytes crypto 32 |> base64UrlEncode encoding
 
-let generateNonce () : string =
-    randomBytes 32 |> base64UrlEncode
+let generateNonce (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+    randomBytes crypto 32 |> base64UrlEncode encoding
 
-let generateCodeVerifier () : string =
-    randomBytes 32 |> base64UrlEncode
+let generateCodeVerifier (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+    randomBytes crypto 32 |> base64UrlEncode encoding
 
-let computeCodeChallenge (verifier: string) : JS.Promise<string> =
-    Interop.Crypto.sha256Digest verifier
-    |> Promise.map (fun buf -> Interop.Buffers.toBytes buf |> base64UrlEncode)
-
-let ensureSubtleCrypto () =
-    if not (Interop.Crypto.isAvailable ()) then
-        failwith "OIDC requires a secure context (HTTPS or localhost) for Web Crypto API"
+let computeCodeChallenge (crypto: ICryptoProvider) (encoding: IEncodingProvider) (verifier: string) : Async<string> =
+    async {
+        let! hash = crypto.sha256 (encoding.utf8Encode verifier)
+        return base64UrlEncode encoding hash
+    }

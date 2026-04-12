@@ -2,7 +2,6 @@
 module Elmish.OIDC.State
 
 open System
-open Fable.Core
 open Elmish
 
 let mutable private pendingDiscovery : DiscoveryDocument option = None
@@ -11,8 +10,8 @@ let mutable private pendingNonce : string option = None
 let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
-let private buildAuthorizeUrl (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
-    let encode = Browser.Dom.window.encodeURIComponent
+let private buildAuthorizeUrl (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
+    let encode = nav.encodeURIComponent
     let scopes = opts.scopes |> String.concat " "
     doc.authorizationEndpoint
     + "?response_type=" + encode "code"
@@ -24,19 +23,6 @@ let private buildAuthorizeUrl (doc: DiscoveryDocument) (opts: Options) (state: s
     + "&code_challenge=" + encode codeChallenge
     + "&code_challenge_method=" + encode "S256"
 
-let private parseCallback () : (string * string) option =
-    let search = Browser.Dom.window.location.search
-    if isNull search || search.Length <= 1 then
-        None
-    else
-        let ps = Interop.UrlSearchParams.create search
-        match Interop.UrlSearchParams.tryGet "code" ps, Interop.UrlSearchParams.tryGet "state" ps with
-        | Some code, Some state -> Some (code, state)
-        | _ -> None
-
-let private stripCallbackFromUrl () : unit =
-    Browser.Dom.window.history.replaceState(null, "", Browser.Dom.window.location.pathname)
-
 let private buildSession (response: TokenResponse) (payload: JwtPayload) : Session<'info> =
     { accessToken = response.accessToken
       idToken = response.idToken
@@ -46,27 +32,28 @@ let private buildSession (response: TokenResponse) (payload: JwtPayload) : Sessi
       claims = payload
       userInfo = None }
 
-let private startLoginCmd (doc: DiscoveryDocument) (opts: Options) (storage: IStorage) : Cmd<Msg<'info>> =
-    Cmd.OfPromise.attempt
+let private startLoginCmd (platform: Platform) (doc: DiscoveryDocument) (opts: Options) : Cmd<Msg<'info>> =
+    Cmd.OfAsync.attempt
         (fun () ->
-            let state = generateState ()
-            let nonce = generateNonce ()
-            let verifier = generateCodeVerifier ()
-            computeCodeChallenge verifier
-            |> Promise.map (fun challenge ->
+            async {
+                let state = generateState platform.crypto platform.encoding
+                let nonce = generateNonce platform.crypto platform.encoding
+                let verifier = generateCodeVerifier platform.crypto platform.encoding
+                let! challenge = computeCodeChallenge platform.crypto platform.encoding verifier
                 let authState =
                     { state = state
                       nonce = nonce
                       codeVerifier = verifier
                       redirectUri = opts.redirectUri }
-                saveAuthState storage authState
-                let url = buildAuthorizeUrl doc opts state nonce challenge
-                Browser.Dom.window.location.href <- url))
+                saveAuthState platform.storage authState
+                let url = buildAuthorizeUrl platform.navigation doc opts state nonce challenge
+                platform.navigation.redirect url
+            })
         ()
         (fun ex -> ValidationFailed (NetworkError ex))
 
-let private logoutCmd (doc: DiscoveryDocument) (opts: Options) (idTokenHint: string option) : Cmd<Msg<'info>> =
-    let encode = Browser.Dom.window.encodeURIComponent
+let private logoutCmd (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (idTokenHint: string option) : Cmd<Msg<'info>> =
+    let encode = nav.encodeURIComponent
     match doc.endSessionEndpoint, opts.postLogoutRedirectUri with
     | Some endpoint, Some postLogoutUri ->
         Cmd.OfFunc.attempt
@@ -77,46 +64,45 @@ let private logoutCmd (doc: DiscoveryDocument) (opts: Options) (idTokenHint: str
                        | Some token -> "id_token_hint=" + encode token + "&"
                        | None -> "")
                     + "post_logout_redirect_uri=" + encode postLogoutUri
-                Browser.Dom.window.location.href <- url)
+                nav.redirect url)
             ()
             (fun _ -> LoggedOut)
     | _ ->
         Cmd.ofMsg LoggedOut
 
-let init (opts: Options) (_storage: IStorage) : Model<'info> * Cmd<Msg<'info>> =
-    ensureSubtleCrypto ()
-    Initializing, Cmd.OfPromise.either fetchDiscovery opts.authority DiscoveryLoaded DiscoveryFailed
+let init (platform: Platform) (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
+    Initializing, Cmd.OfAsync.either (fetchDiscovery platform.http) opts.authority DiscoveryLoaded DiscoveryFailed
 
-let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string -> JS.Promise<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
+let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
     match model, msg with
     | Initializing, DiscoveryLoaded doc ->
         pendingDiscovery <- Some doc
-        Initializing, Cmd.OfPromise.either fetchJwks doc.jwksUri JwksLoaded JwksFailed
+        Initializing, Cmd.OfAsync.either (fetchJwks platform.http) doc.jwksUri JwksLoaded JwksFailed
 
     | Initializing, JwksLoaded jwks ->
         match pendingDiscovery with
         | Some doc ->
             pendingDiscovery <- None
-            match parseCallback () with
+            match platform.navigation.getCallbackParams () with
             | Some (code, callbackState) ->
-                stripCallbackFromUrl ()
-                match loadAuthState storage with
+                platform.navigation.clearCallbackParams ()
+                match loadAuthState platform.storage with
                 | Some authState when authState.state = callbackState ->
                     pendingNonce <- Some authState.nonce
                     Ready (doc, jwks, ExchangingCode),
-                    Cmd.OfPromise.either
-                        (fun () -> exchangeCode doc opts.clientId code authState.codeVerifier authState.redirectUri)
+                    Cmd.OfAsync.either
+                        (fun () -> exchangeCode platform doc opts.clientId code authState.codeVerifier authState.redirectUri)
                         ()
                         TokenReceived
                         (fun ex -> ValidationFailed (TokenExchangeFailed ex.Message))
                 | _ ->
                     Ready (doc, jwks, Unauthenticated), Cmd.none
             | None ->
-                match loadSession storage with
+                match loadSession platform.storage with
                 | Some response ->
                     Ready (doc, jwks, ValidatingToken),
-                    Cmd.OfPromise.either
-                        (fun () -> revalidateStoredToken opts (nowEpoch ()) response.idToken jwks)
+                    Cmd.OfAsync.either
+                        (fun () -> revalidateStoredToken platform opts (nowEpoch ()) response.idToken jwks)
                         ()
                         (fun result ->
                             match result with
@@ -133,8 +119,8 @@ let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string ->
         | Some nonce ->
             pendingNonce <- None
             Ready (doc, jwks, ValidatingToken),
-            Cmd.OfPromise.either
-                (fun () -> validateIdToken opts nonce (nowEpoch ()) response.idToken jwks)
+            Cmd.OfAsync.either
+                (fun () -> validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks)
                 ()
                 (fun result ->
                     match result with
@@ -148,8 +134,8 @@ let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string ->
         let session = buildSession response payload
         Ready (doc, jwks, Authenticated session),
         Cmd.batch [
-            Cmd.OfFunc.attempt (saveSession storage) response (fun _ -> NoSession)
-            Cmd.OfPromise.either
+            Cmd.OfFunc.attempt (saveSession platform.storage) response (fun _ -> NoSession)
+            Cmd.OfAsync.either
                 (fun () -> getUserInfo doc.userinfoEndpoint session.accessToken)
                 ()
                 UserInfo
@@ -157,7 +143,7 @@ let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string ->
         ]
 
     | Ready (doc, jwks, _), ValidationFailed _ ->
-        clearAll storage
+        clearAll platform.storage
         Ready (doc, jwks, Unauthenticated), Cmd.none
 
     | Ready (doc, jwks, Authenticated session), UserInfo info ->
@@ -170,8 +156,8 @@ let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string ->
         let expiresInSeconds = int (session.expiresAt.ToUnixTimeSeconds() - nowEpoch ())
         if expiresInSeconds <= opts.renewBeforeExpirySeconds then
             Ready (doc, jwks, Renewing session),
-            Cmd.OfPromise.either
-                (fun () -> silentRenew doc opts jwks storage)
+            Cmd.OfAsync.either
+                (fun () -> platform.renewal.renew doc opts jwks platform.storage)
                 ()
                 SilentRenewResult
                 (fun ex -> SilentRenewResult (Error (NetworkError ex)))
@@ -184,22 +170,22 @@ let update (opts: Options) (storage: IStorage) (getUserInfo: string -> string ->
     | Ready (doc, jwks, Renewing session), SilentRenewResult (Ok (payload, response)) ->
         let newSession = buildSession response payload
         Ready (doc, jwks, Authenticated { newSession with userInfo = session.userInfo }),
-        Cmd.OfFunc.attempt (saveSession storage) response (fun _ -> NoSession)
+        Cmd.OfFunc.attempt (saveSession platform.storage) response (fun _ -> NoSession)
 
     | Ready (doc, jwks, Renewing session), SilentRenewResult (Error _) ->
         Ready (doc, jwks, Authenticated session), Cmd.none
 
     | Ready (doc, jwks, _), LogIn ->
-        Ready (doc, jwks, Redirecting), startLoginCmd doc opts storage
+        Ready (doc, jwks, Redirecting), startLoginCmd platform doc opts
 
     | Ready (doc, jwks, readyState), LogOut ->
-        clearAll storage
+        clearAll platform.storage
         let idTokenHint =
             match readyState with
             | Authenticated session -> Some session.idToken
             | Renewing session -> Some session.idToken
             | _ -> None
-        Ready (doc, jwks, Unauthenticated), logoutCmd doc opts idTokenHint
+        Ready (doc, jwks, Unauthenticated), logoutCmd platform.navigation doc opts idTokenHint
 
     | Ready (doc, jwks, _), LoggedOut ->
         Ready (doc, jwks, Unauthenticated), Cmd.none

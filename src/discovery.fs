@@ -1,7 +1,6 @@
 [<AutoOpen>]
 module Elmish.OIDC.Discovery
 
-open Fable.Core
 open Thoth.Json
 
 let private discoveryDecoder : Decoder<DiscoveryDocument> =
@@ -13,17 +12,17 @@ let private discoveryDecoder : Decoder<DiscoveryDocument> =
           jwksUri = get.Required.Field "jwks_uri" Decode.string
           endSessionEndpoint = get.Optional.Field "end_session_endpoint" Decode.string })
 
-let fetchDiscovery (authority: string) : JS.Promise<DiscoveryDocument> =
+let fetchDiscovery (http: IHttpClient) (authority: string) : Async<DiscoveryDocument> =
     let authority = authority.TrimEnd('/')
     let url = authority + "/.well-known/openid-configuration"
 
-    Interop.Http.get url
-    |> Promise.bind (fun response -> response.text())
-    |> Promise.map (fun text ->
+    async {
+        let! text = http.getText url
         match Decode.fromString discoveryDecoder text with
         | Ok doc ->
             if doc.issuer <> authority then
-                failwith $"Issuer mismatch: expected '{authority}' but got '{doc.issuer}'"
-            doc
+                return failwith $"Issuer mismatch: expected '{authority}' but got '{doc.issuer}'"
+            return doc
         | Error err ->
-            failwith $"Failed to decode discovery document: {err}")
+            return failwith $"Failed to decode discovery document: {err}"
+    }

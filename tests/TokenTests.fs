@@ -5,8 +5,12 @@ open Fable.Core
 open Elmish.OIDC.Types
 open Elmish.OIDC.Token
 open Elmish.OIDC.Crypto
+open Elmish.OIDC.Browser
 open Tests.Helpers
 open Thoth.Json
+
+let private enc = BrowserEncoding
+let private plt = testPlatform (MemoryStorage() :> IStorage)
 
 let private validHeader : JwtHeader =
     { alg = "RS256"; kid = "test-kid-1" }
@@ -26,7 +30,7 @@ let tests = testList "Token" [
         testCase "valid JWT decodes header and payload" <| fun _ ->
             let payload = validPayload ()
             let jwt = buildTestJwt validHeader payload
-            match decodeJwt jwt with
+            match decodeJwt enc jwt with
             | Ok (header, decoded) ->
                 Expect.equal header.alg "RS256" "alg"
                 Expect.equal header.kid "test-kid-1" "kid"
@@ -38,17 +42,17 @@ let tests = testList "Token" [
                 failwith $"Expected Ok but got Error: {err}"
 
         testCase "rejects JWT with wrong number of segments" <| fun _ ->
-            match decodeJwt "only.two" with
+            match decodeJwt enc "only.two" with
             | Error msg -> Expect.isTrue (msg.Contains("3 parts")) "should mention 3 parts"
             | Ok _ -> failwith "Expected error for malformed JWT"
 
         testCase "rejects single segment" <| fun _ ->
-            match decodeJwt "nodotsatall" with
+            match decodeJwt enc "nodotsatall" with
             | Error _ -> ()
             | Ok _ -> failwith "Expected error for single segment"
 
         testCase "rejects four segments" <| fun _ ->
-            match decodeJwt "a.b.c.d" with
+            match decodeJwt enc "a.b.c.d" with
             | Error _ -> ()
             | Ok _ -> failwith "Expected error for four segments"
 
@@ -57,7 +61,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":"{testOptions.clientId}","exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match decodeJwt jwt with
+            match decodeJwt enc jwt with
             | Ok (_, payload) ->
                 Expect.equal payload.aud [ testOptions.clientId ] "single aud string should decode to list"
             | Error err ->
@@ -68,7 +72,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":["{testOptions.clientId}","other-client"],"exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match decodeJwt jwt with
+            match decodeJwt enc jwt with
             | Ok (_, p) ->
                 Expect.equal p.aud.Length 2 "should have two audiences"
                 Expect.isTrue (p.aud |> List.contains testOptions.clientId) "should contain our client"
@@ -79,7 +83,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":"{testOptions.clientId}","exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match decodeJwt jwt with
+            match decodeJwt enc jwt with
             | Ok (_, p) -> Expect.isNone p.nonce "missing nonce should be None"
             | Error err -> failwith $"Expected Ok: {err}"
     ]
@@ -196,7 +200,7 @@ let tests = testList "Token" [
                 let payload = validPayload ()
                 let jwt = buildTestJwt validHeader payload
                 let jwks : Jwks = { keys = [] }
-                let! result = validateIdToken testOptions "test-nonce" (nowEpoch ()) jwt jwks |> Async.AwaitPromise
+                let! result = validateIdToken plt testOptions "test-nonce" (nowEpoch ()) jwt jwks
                 match result with
                 | Error msg -> Expect.isTrue (msg.Contains("No signing key")) "should report missing key"
                 | Ok _ -> failwith "unknown kid should fail"
@@ -209,7 +213,7 @@ let tests = testList "Token" [
                 // Key exists but use = "enc" not "sig"
                 let key : JwksKey = { kty = "RSA"; kid = "test-kid-1"; n = "abc"; e = "AQAB"; alg = "RS256"; ``use`` = "enc" }
                 let jwks : Jwks = { keys = [ key ] }
-                let! result = validateIdToken testOptions "test-nonce" (nowEpoch ()) jwt jwks |> Async.AwaitPromise
+                let! result = validateIdToken plt testOptions "test-nonce" (nowEpoch ()) jwt jwks
                 match result with
                 | Error msg -> Expect.isTrue (msg.Contains("No signing key")) "should reject non-sig key"
                 | Ok _ -> failwith "enc key should not be used for signatures"
@@ -234,7 +238,7 @@ let tests = testList "Token" [
                     ] |> Encode.toString 0
 
                 let! jwt = signJwt privateKey headerJson payloadJson |> Async.AwaitPromise
-                let! result = validateIdToken testOptions nonce now jwt jwks |> Async.AwaitPromise
+                let! result = validateIdToken plt testOptions nonce now jwt jwks
                 Expect.isOk result "valid signed token should pass"
             }
 
@@ -269,7 +273,7 @@ let tests = testList "Token" [
                     ] |> Encode.toString 0
                 let tamperedJwt = $"{parts.[0]}.{jsonToBase64Url tamperedPayloadJson}.{parts.[2]}"
 
-                let! result = validateIdToken testOptions nonce now tamperedJwt jwks |> Async.AwaitPromise
+                let! result = validateIdToken plt testOptions nonce now tamperedJwt jwks
                 match result with
                 | Error msg -> Expect.isTrue (msg.Contains("Signature")) "should fail signature"
                 | Ok _ -> failwith "tampered token should not validate"
@@ -292,7 +296,7 @@ let tests = testList "Token" [
                     ] |> Encode.toString 0
 
                 let! jwt = signJwt privateKey headerJson payloadJson |> Async.AwaitPromise
-                let! result = revalidateStoredToken testOptions now jwt jwks |> Async.AwaitPromise
+                let! result = revalidateStoredToken plt testOptions now jwt jwks
                 Expect.isOk result "revalidation without nonce should succeed"
             }
     ]

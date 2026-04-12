@@ -3,19 +3,6 @@ module Elmish.OIDC.Storage
 
 open Thoth.Json
 
-let private makeStorage (storage: Browser.Types.Storage) =
-    { new IStorage with
-        member _.getItem key =
-            storage.[key] |> Option.ofObj
-        member _.setItem key value =
-            storage.[key] <- value
-        member _.removeItem key =
-            storage.removeItem key }
-
-let SessionStorage = makeStorage Browser.Dom.window.sessionStorage
-
-let LocalStorage = makeStorage Browser.Dom.window.localStorage
-
 [<Literal>]
 let AuthStateKey = "oidc:auth_state"
 

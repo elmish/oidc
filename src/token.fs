@@ -1,7 +1,6 @@
 [<AutoOpen>]
 module Elmish.OIDC.Token
 
-open Fable.Core
 open Thoth.Json
 
 let private tokenResponseDecoder : Decoder<TokenResponse> =
@@ -53,8 +52,8 @@ let private jwksDecoder : Decoder<Jwks> =
     Decode.object (fun get ->
         { keys = get.Required.Field "keys" (Decode.list jwksKeyDecoder) })
 
-let exchangeCode (doc: DiscoveryDocument) (clientId: string) (code: string) (codeVerifier: string) (redirectUri: string) : JS.Promise<TokenResponse> =
-    let encode = Browser.Dom.window.encodeURIComponent
+let exchangeCode (platform: Platform) (doc: DiscoveryDocument) (clientId: string) (code: string) (codeVerifier: string) (redirectUri: string) : Async<TokenResponse> =
+    let encode = platform.navigation.encodeURIComponent
     let body =
         [ "grant_type", "authorization_code"
           "code", code
@@ -64,43 +63,44 @@ let exchangeCode (doc: DiscoveryDocument) (clientId: string) (code: string) (cod
         |> List.map (fun (k, v) -> $"{encode k}={encode v}")
         |> String.concat "&"
 
-    Interop.Http.postForm doc.tokenEndpoint body
-    |> Promise.bind (fun response -> response.text())
-    |> Promise.map (fun text ->
+    async {
+        let! text = platform.http.postForm doc.tokenEndpoint body
         match Decode.fromString tokenErrorDecoder text with
-        | Ok errMsg -> failwith errMsg
+        | Ok errMsg -> return failwith errMsg
         | Error _ ->
             match Decode.fromString tokenResponseDecoder text with
-            | Ok resp -> resp
-            | Error err -> failwith $"Failed to decode token response: {err}")
+            | Ok resp -> return resp
+            | Error err -> return failwith $"Failed to decode token response: {err}"
+    }
 
-let fetchJwks (jwksUri: string) : JS.Promise<Jwks> =
-    Interop.Http.get jwksUri
-    |> Promise.bind (fun response -> response.text())
-    |> Promise.map (fun text ->
+let fetchJwks (http: IHttpClient) (jwksUri: string) : Async<Jwks> =
+    async {
+        let! text = http.getText jwksUri
         match Decode.fromString jwksDecoder text with
-        | Ok jwks -> jwks
-        | Error err -> failwith $"Failed to decode JWKS: {err}")
+        | Ok jwks -> return jwks
+        | Error err -> return failwith $"Failed to decode JWKS: {err}"
+    }
 
-let decodeJwt (jwt: string) : Result<JwtHeader * JwtPayload, string> =
+let decodeJwt (encoding: IEncodingProvider) (jwt: string) : Result<JwtHeader * JwtPayload, string> =
     let parts = jwt.Split('.')
 
     if parts.Length <> 3 then
         Error "JWT must have exactly 3 parts"
     else
-        let headerJson = parts.[0] |> base64UrlDecode |> Interop.Encoding.fromBytes
-        let payloadJson = parts.[1] |> base64UrlDecode |> Interop.Encoding.fromBytes
+        let headerJson = parts.[0] |> base64UrlDecode encoding |> encoding.utf8Decode
+        let payloadJson = parts.[1] |> base64UrlDecode encoding |> encoding.utf8Decode
 
         match Decode.fromString jwtHeaderDecoder headerJson, Decode.fromString jwtPayloadDecoder payloadJson with
         | Ok header, Ok payload -> Ok(header, payload)
         | Error err, _ -> Error $"Failed to decode JWT header: {err}"
         | _, Error err -> Error $"Failed to decode JWT payload: {err}"
 
-let verifySignature (key: obj) (jwt: string) : JS.Promise<bool> =
+let verifySignature (platform: Platform) (key: obj) (jwt: string) : Async<bool> =
     let parts = jwt.Split('.')
     let signedData = parts.[0] + "." + parts.[1]
-    let signatureBytes = base64UrlDecode parts.[2]
-    Interop.Crypto.verify key (Interop.Buffers.toArrayBuffer signatureBytes) (Interop.Encoding.toArrayBuffer signedData)
+    let signatureBytes = base64UrlDecode platform.encoding parts.[2]
+    let dataBytes = platform.encoding.utf8Encode signedData
+    platform.crypto.rsaVerify key signatureBytes dataBytes
 
 let validateClaims
     (opts: Options)
@@ -126,30 +126,31 @@ let validateClaims
         | _ -> Ok()
 
 let private validateAndVerify
+    (platform: Platform)
     (opts: Options)
     (nonce: string option)
     (nowEpoch: int64)
     (jwt: string)
     (jwks: Jwks)
-    : JS.Promise<Result<JwtPayload, string>> =
-    match decodeJwt jwt with
-    | Error err -> Promise.lift (Error err)
+    : Async<Result<JwtPayload, string>> =
+    match decodeJwt platform.encoding jwt with
+    | Error err -> async { return Error err }
     | Ok(header, payload) ->
         match validateClaims opts nonce nowEpoch header payload with
-        | Error err -> Promise.lift (Error err)
+        | Error err -> async { return Error err }
         | Ok() ->
             match jwks.keys |> List.tryFind (fun k -> k.kid = header.kid && k.``use`` = "sig") with
-            | None -> Promise.lift (Error $"No signing key found for kid '{header.kid}'")
+            | None -> async { return Error $"No signing key found for kid '{header.kid}'" }
             | Some jwkKey ->
-                Interop.Crypto.importJwk (jwkKey :> obj)
-                |> Promise.bind (fun cryptoKey ->
-                    verifySignature cryptoKey jwt
-                    |> Promise.map (fun valid ->
-                        if valid then Ok payload
-                        else Error "Signature verification failed"))
+                async {
+                    let! cryptoKey = platform.crypto.importRsaKey jwkKey
+                    let! valid = verifySignature platform cryptoKey jwt
+                    if valid then return Ok payload
+                    else return Error "Signature verification failed"
+                }
 
-let validateIdToken (opts: Options) (nonce: string) (nowEpoch: int64) (jwt: string) (jwks: Jwks) : JS.Promise<Result<JwtPayload, string>> =
-    validateAndVerify opts (Some nonce) nowEpoch jwt jwks
+let validateIdToken (platform: Platform) (opts: Options) (nonce: string) (nowEpoch: int64) (jwt: string) (jwks: Jwks) : Async<Result<JwtPayload, string>> =
+    validateAndVerify platform opts (Some nonce) nowEpoch jwt jwks
 
-let revalidateStoredToken (opts: Options) (nowEpoch: int64) (jwt: string) (jwks: Jwks) : JS.Promise<Result<JwtPayload, string>> =
-    validateAndVerify opts None nowEpoch jwt jwks
+let revalidateStoredToken (platform: Platform) (opts: Options) (nowEpoch: int64) (jwt: string) (jwks: Jwks) : Async<Result<JwtPayload, string>> =
+    validateAndVerify platform opts None nowEpoch jwt jwks

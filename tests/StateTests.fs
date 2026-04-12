@@ -22,6 +22,10 @@ let private testSession () : Session<string> =
       claims = { iss = "https://auth.example.com"; sub = "user"; aud = ["client"]; exp = 0L; iat = 0L; nonce = None }
       userInfo = None }
 
+let private updateWith (storage: IStorage) msg model =
+    let plt = testPlatform storage
+    State.update plt testOptions (fun _ _ -> async { return "info" }) msg model
+
 let tests = testList "State" [
 
     testList "CSRF state validation" [
@@ -66,7 +70,7 @@ let tests = testList "State" [
     testList "update transitions" [
         testCase "DiscoveryFailed produces Failed model" <| fun _ ->
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     (DiscoveryFailed (exn "network error"))
                     Initializing
             match model with
@@ -78,7 +82,7 @@ let tests = testList "State" [
             saveSession storage
                 { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None }
             let model, _cmd =
-                update testOptions storage (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith storage
                     (ValidationFailed (InvalidToken "bad"))
                     (Ready (testDiscoveryDoc, { keys = [] }, ValidatingToken))
             match model with
@@ -88,7 +92,7 @@ let tests = testList "State" [
 
         testCase "LoggedOut returns Unauthenticated" <| fun _ ->
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     LoggedOut
                     (Ready (testDiscoveryDoc, { keys = [] }, Unauthenticated))
             match model with
@@ -98,7 +102,7 @@ let tests = testList "State" [
         testCase "Tick when not near expiry stays Authenticated" <| fun _ ->
             let session = { testSession () with expiresAt = System.DateTimeOffset.UtcNow.AddHours(1.0) }
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Authenticated session))
             match model with
@@ -108,7 +112,7 @@ let tests = testList "State" [
         testCase "Tick when near expiry transitions to Renewing" <| fun _ ->
             let session = { testSession () with expiresAt = System.DateTimeOffset.UtcNow.AddSeconds(10.0) }
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Authenticated session))
             match model with
@@ -118,7 +122,7 @@ let tests = testList "State" [
         testCase "Tick during Renewing is ignored" <| fun _ ->
             let session = testSession ()
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Renewing session))
             match model with
@@ -127,7 +131,7 @@ let tests = testList "State" [
 
         testCase "unexpected message in wrong state is ignored" <| fun _ ->
             let model, _cmd =
-                update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
+                updateWith (MemoryStorage() :> IStorage)
                     (TokenReceived { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None })
                     Initializing
             match model with
