@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "test": "dotnet tool restore && dotnet fable tests/Tests.fsproj -o tests/out && npx mocha --require global-jsdom/register tests/out/Main.js"
+        "test": "dotnet tool restore && dotnet fable tests/Tests.fsproj -o tests/out && npx mocha --require global-jsdom/register tests/out/Main.js",
+        "test:rn": "dotnet tool restore && dotnet fable reactnative.tests/Tests.fsproj -o reactnative.tests/out && npx mocha reactnative.tests/out/Main.js"
     },
     "devDependencies": {
         "global-jsdom": "^29.0.0",

@@ -34,7 +34,7 @@ let private buildSession (response: TokenResponse) (payload: JwtPayload) : Sessi
       userInfo = None }
 
 let private startLoginCmd (platform: Platform) (doc: DiscoveryDocument) (opts: Options) : Cmd<Msg<'info>> =
-    Cmd.OfAsync.attempt
+    Cmd.OfAsync.either
         (fun () ->
             async {
                 let state = Crypto.generateState platform.crypto platform.encoding
@@ -49,8 +49,18 @@ let private startLoginCmd (platform: Platform) (doc: DiscoveryDocument) (opts: O
                 Storage.saveAuthState platform.storage authState
                 let url = buildAuthorizeUrl platform.navigation doc opts state nonce challenge
                 platform.navigation.redirect url
+                // For non-browser platforms, callback params may already be available
+                match platform.navigation.getCallbackParams () with
+                | Some (code, callbackState) ->
+                    platform.navigation.clearCallbackParams ()
+                    return Some (code, callbackState)
+                | None ->
+                    return None
             })
         ()
+        (function
+            | Some (code, state) -> AuthCallback (code, state)
+            | None -> NoSession)
         (fun ex -> ValidationFailed (NetworkError ex))
 
 let private logoutCmd (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (idTokenHint: string option) : Cmd<Msg<'info>> =
@@ -178,6 +188,19 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
 
     | Ready (doc, jwks, _), LogIn ->
         Ready (doc, jwks, Redirecting), startLoginCmd platform doc opts
+
+    | Ready (doc, jwks, Redirecting), AuthCallback (code, callbackState) ->
+        match Storage.loadAuthState platform.storage with
+        | Some authState when authState.state = callbackState ->
+            pendingNonce <- Some authState.nonce
+            Ready (doc, jwks, ExchangingCode),
+            Cmd.OfAsync.either
+                (fun () -> Token.exchangeCode platform doc opts.clientId code authState.codeVerifier authState.redirectUri)
+                ()
+                TokenReceived
+                (fun ex -> ValidationFailed (TokenExchangeFailed ex.Message))
+        | _ ->
+            Ready (doc, jwks, Unauthenticated), Cmd.none
 
     | Ready (doc, jwks, readyState), LogOut ->
         Storage.clearAll platform.storage

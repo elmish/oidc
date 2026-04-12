@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <DefineConstants>$(DefineConstants);FABLE_COMPILER;REACT_NATIVE</DefineConstants>
+    <Description>Elmish OIDC client for React Native apps via Fable</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../src/types.fs" />
+    <Compile Include="interop.fs" />
+    <Compile Include="../src/crypto.fs" />
+    <Compile Include="../src/discovery.fs" />
+    <Compile Include="../src/token.fs" />
+    <Compile Include="../src/storage.fs" />
+    <Compile Include="../src/renewal.fs" />
+    <Compile Include="reactnative.fs" />
+    <Compile Include="reactnative.navigation.fs" />
+    <Compile Include="reactnative.renewal.fs" />
+    <Compile Include="../src/state.fs" />
+    <Compile Include="../src/api.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="*.fsproj; *.fs" PackagePath="fable\" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Fable.Core" />
+    <PackageReference Include="Fable.Elmish" />
+    <PackageReference Include="Fable.Promise" />
+    <PackageReference Include="Thoth.Json" />
+  </ItemGroup>
+</Project>

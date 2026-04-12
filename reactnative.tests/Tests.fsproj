@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Helpers.fs" />
+    <Compile Include="CryptoTests.fs" />
+    <Compile Include="TokenTests.fs" />
+    <Compile Include="DiscoveryTests.fs" />
+    <Compile Include="StorageTests.fs" />
+    <Compile Include="RenewalTests.fs" />
+    <Compile Include="StateTests.fs" />
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../reactnative/Fable.Elmish.OIDC.ReactNative.fsproj" />
+    <PackageReference Include="Fable.Core" />
+    <PackageReference Include="Fable.Mocha" />
+  </ItemGroup>
+</Project>

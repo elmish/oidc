@@ -2,6 +2,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Fable.Fetch" Version="2.7.0" />
@@ -12,6 +13,7 @@
     <PackageVersion Include="Fable.Browser.Dom" Version="2.*" />
     <PackageVersion Include="Thoth.Json" Version="6.*" />
     <PackageVersion Include="Thoth.Json.Net" Version="6.*" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.*" />
     <PackageVersion Include="Elmish" Version="4.*" />
     <PackageVersion Include="Fable.Mocha" Version="2.*" />
     <PackageVersion Include="Expecto" Version="10.*" />

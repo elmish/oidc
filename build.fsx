@@ -23,6 +23,8 @@ let gitRepo = sprintf "git@github.com:%s/%s" gitOwner gitName
 
 let projects  =
       !! "src/**.fsproj"
+      ++ "netstandard/**.fsproj"
+      ++ "reactnative/**.fsproj"
 
 System.Environment.GetCommandLineArgs()
 |> Array.skip 2 // fsi.exe; build.fsx
@@ -32,8 +34,10 @@ System.Environment.GetCommandLineArgs()
 |> Context.setExecutionContext
 
 Target.create "Clean" (fun _ ->
-    Shell.cleanDir "src/obj"
-    Shell.cleanDir "src/bin"
+    !! "**/obj"
+    ++ "**/bin"
+    -- "node_modules/**"
+    |> Shell.cleanDirs
 )
 
 Target.create "Restore" (fun _ ->
@@ -80,11 +84,16 @@ Target.create "Package" (fun _ ->
 )
 
 Target.create "PublishNuget" (fun _ ->
-    let exec dir = DotNet.exec (DotNet.Options.withWorkingDirectory dir)
+    let nugetKey = Environment.environVar "nugetkey"
+    let ver = string release.SemVer
+    let push dir pkg =
+        let exec = DotNet.exec (DotNet.Options.withWorkingDirectory dir)
+        let result = exec "nuget" $"push {pkg}.{ver}.nupkg -s nuget.org -k {nugetKey}"
+        if (not result.OK) then failwithf "%A" result.Errors
 
-    let args = sprintf "push Fable.Elmish.OIDC.%s.nupkg -s nuget.org -k %s" (string release.SemVer) (Environment.environVar "nugetkey")
-    let result = exec "src/bin/Release" "nuget" args
-    if (not result.OK) then failwithf "%A" result.Errors
+    push "src/bin/Release" "Fable.Elmish.OIDC"
+    push "netstandard/bin/Release" "Elmish.OIDC"
+    push "reactnative/bin/Release" "Fable.Elmish.OIDC.ReactNative"
 )
 
 Target.create "Publish" ignore

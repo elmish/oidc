@@ -1,3 +1,15 @@
+### 1.0.0-alpha.2
+
+* Multi-platform support — platform abstraction layer for Browser, .NET, and React Native
+* New packages: `Elmish.OIDC` (.NET/WPF/MAUI) and `Fable.Elmish.OIDC.ReactNative` (Expo/RN)
+* .NET platform: `System.Security.Cryptography` RSA/SHA256, `HttpListener` loopback redirect (RFC 8252), refresh token renewal
+* React Native platform: Web Crypto API, `expo-web-browser` auth session + deep link navigation, refresh token renewal
+* Platform-aware API: `Oidc.initPlatform`, `Oidc.updatePlatform`, `Oidc.subscribePlatform`
+* `Token.exchangeRefreshToken` for refresh_token grant (used by .NET and RN renewal strategies)
+* `AuthCallback` message for native platform callback flows (loopback, deep link, auth session)
+* Browser backward-compatible API preserved: `Oidc.init`, `Oidc.update`, `Oidc.subscribe`
+* 189 tests across 3 platforms (61 browser, 66 .NET, 62 React Native)
+
 ### 1.0.0-alpha.1
 
 * **Breaking:** Complete rewrite — Authorization Code Flow with PKCE replaces deprecated Implicit Flow

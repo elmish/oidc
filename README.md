@@ -3,30 +3,36 @@ Elmish-OIDC
 [![Build](https://github.com/elmish/OIDC/actions/workflows/ci.yml/badge.svg)](https://github.com/elmish/OIDC/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/Fable.Elmish.OIDC.svg)](https://www.nuget.org/packages/Fable.Elmish.OIDC)
 
-[Authorization Code Flow with PKCE](https://oauth.net/2/pkce/) component for [Elmish](https://github.com/elmish/elmish) applications.
+[Authorization Code Flow with PKCE](https://oauth.net/2/pkce/) component for [Elmish](https://github.com/elmish/elmish) applications — **browser, .NET, and React Native**.
 
-Requires HTTPS (or localhost) — uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) for PKCE challenge generation and JWT signature verification.
+## Packages
+
+| Package | Platform | NuGet |
+|---------|----------|-------|
+| `Fable.Elmish.OIDC` | Browser (Fable) | [![NuGet](https://img.shields.io/nuget/v/Fable.Elmish.OIDC.svg)](https://www.nuget.org/packages/Fable.Elmish.OIDC) |
+| `Elmish.OIDC` | .NET (WPF/MAUI) | [![NuGet](https://img.shields.io/nuget/v/Elmish.OIDC.svg)](https://www.nuget.org/packages/Elmish.OIDC) |
+| `Fable.Elmish.OIDC.ReactNative` | React Native (Expo/Fable) | [![NuGet](https://img.shields.io/nuget/v/Fable.Elmish.OIDC.ReactNative.svg)](https://www.nuget.org/packages/Fable.Elmish.OIDC.ReactNative) |
 
 ## Features
 
 - **Authorization Code + PKCE** (OAuth 2.1) — Implicit Flow is not supported
 - **OIDC Discovery** — endpoints resolved automatically from `.well-known/openid-configuration`
 - **Client-side JWT validation** — RS256 signature verification, issuer/audience/expiry/nonce claim checks
-- **Silent token renewal** — hidden iframe with `prompt=none`, automatic expiry monitoring via Elmish subscription
-- **Session resume** — stored tokens revalidated on page load
+- **Silent token renewal** — iframe (browser), refresh token (native)
+- **Session resume** — stored tokens revalidated on app start
 - **Configurable** — clock skew tolerance, algorithm allowlist, custom storage, renewal timing
-
-## Requirements
-
-- Fable 4+
-- Fable.Elmish 5+
-- Fable.Browser.Dom 2+
-- Thoth.Json 6+
 
 ## Installation
 
 ```shell
+# Browser (Fable)
 dotnet add package Fable.Elmish.OIDC
+
+# .NET (WPF/MAUI)
+dotnet add package Elmish.OIDC
+
+# React Native (Expo)
+dotnet add package Fable.Elmish.OIDC.ReactNative
 ```
 
 ## Usage
@@ -34,7 +40,9 @@ dotnet add package Fable.Elmish.OIDC
 ### Configuration
 
 ```fsharp
-let oidcOptions : Elmish.OIDC.Types.Options =
+open Elmish.OIDC.Types
+
+let oidcOptions : Options =
     { clientId = "my-app"
       authority = "https://idp.example.com"
       scopes = [ "openid"; "profile"; "email" ]
@@ -46,77 +54,135 @@ let oidcOptions : Elmish.OIDC.Types.Options =
       allowedAlgorithms = [ "RS256" ] }
 ```
 
-### Integration
+### Browser (Fable)
+
+Uses the convenience API — platform is created automatically with Web Crypto and iframe renewal.
 
 ```fsharp
 open Elmish
 open Elmish.OIDC
 
-type UserInfo = { name: string; email: string }
-
-type Model = { oidc: Model<UserInfo>; (* your app state *) }
-type Msg = OidcMsg of Msg<UserInfo> | (* your app messages *)
-
-let getUserInfo (userinfoEndpoint: string) (accessToken: string) : Fable.Core.JS.Promise<UserInfo> =
-    // fetch userinfoEndpoint with Bearer accessToken, decode the response
-    failwith "implement"
+type Model = { oidc: Model<UserInfo> }
+type Msg = OidcMsg of Msg<UserInfo>
 
 let init () =
-    let oidcModel, oidcCmd = Oidc.init oidcOptions
-    { oidc = oidcModel }, Cmd.map OidcMsg oidcCmd
+    let m, c = Oidc.init oidcOptions
+    { oidc = m }, Cmd.map OidcMsg c
 
 let update msg model =
     match msg with
     | OidcMsg m ->
         let m', c = Oidc.update oidcOptions getUserInfo m model.oidc
         { model with oidc = m' }, Cmd.map OidcMsg c
-    | (* handle your messages *)
 
 let subscribe model =
     Oidc.subscribe model.oidc |> Sub.map "oidc" OidcMsg
-
-let view model dispatch =
-    match Oidc.tryGetSession model.oidc with
-    | Some session ->
-        // authenticated — session.accessToken, session.claims, session.userInfo available
-        // dispatch (OidcMsg LogOut) to log out
-        ()
-    | None ->
-        // not authenticated — dispatch (OidcMsg LogIn) to start login
-        ()
 ```
 
-### Silent Renewal
-
-For silent token renewal, host a page at your `silentRedirectUri` with:
+Host a silent renewal page at `silentRedirectUri`:
 
 ```html
 <!DOCTYPE html>
-<html>
-<body>
+<html><body>
 <script>parent.postMessage(location.search, location.origin)</script>
-</body>
-</html>
+</body></html>
+```
+
+### .NET (WPF/MAUI)
+
+Uses the platform-aware API with loopback redirect ([RFC 8252](https://tools.ietf.org/html/rfc8252)) and refresh token renewal.
+
+```fsharp
+open Elmish
+open Elmish.OIDC
+open Elmish.OIDC.Types
+
+let nav = DotNetNavigation.loopback 8912
+let storage = DotNet.memoryStorage ()
+
+let platform =
+    let p = { crypto = DotNet.crypto; encoding = DotNet.encoding
+              http = DotNet.http; navigation = nav
+              renewal = Unchecked.defaultof<RenewalStrategy>
+              storage = storage; timer = DotNet.timer }
+    { p with renewal = DotNetRenewal.refreshToken p }
+
+let init () =
+    let m, c = Oidc.initPlatform platform oidcOptions
+    { oidc = m }, Cmd.map OidcMsg c
+
+let update msg model =
+    match msg with
+    | OidcMsg m ->
+        let m', c = Oidc.updatePlatform platform oidcOptions getUserInfo m model.oidc
+        { model with oidc = m' }, Cmd.map OidcMsg c
+
+let subscribe model =
+    Oidc.subscribePlatform platform model.oidc |> Sub.map "oidc" OidcMsg
+```
+
+### React Native (Expo)
+
+Uses `expo-web-browser` for in-app authentication and refresh token renewal.
+
+```fsharp
+open Elmish
+open Elmish.OIDC
+open Elmish.OIDC.Types
+
+let nav = ReactNativeNavigation.authSession oidcOptions.redirectUri
+let storage = ReactNative.memoryStorage ()
+
+let platform =
+    let p = { crypto = ReactNative.crypto; encoding = ReactNative.encoding
+              http = ReactNative.http; navigation = nav
+              renewal = Unchecked.defaultof<RenewalStrategy>
+              storage = storage; timer = ReactNative.timer }
+    { p with renewal = ReactNativeRenewal.refreshToken p }
+
+let init () =
+    let m, c = Oidc.initPlatform platform oidcOptions
+    { oidc = m }, Cmd.map OidcMsg c
+
+let update msg model =
+    match msg with
+    | OidcMsg m ->
+        let m', c = Oidc.updatePlatform platform oidcOptions getUserInfo m model.oidc
+        { model with oidc = m' }, Cmd.map OidcMsg c
+
+let subscribe model =
+    Oidc.subscribePlatform platform model.oidc |> Sub.map "oidc" OidcMsg
 ```
 
 ### API
 
-| Function | Signature | Description |
-|---|---|---|
-| `Oidc.init` | `Options -> Model<'info> * Cmd<Msg<'info>>` | Initialize with session storage |
-| `Oidc.initWith` | `Options -> IStorage -> Model<'info> * Cmd<Msg<'info>>` | Initialize with custom storage |
-| `Oidc.update` | `Options -> (string -> string -> Promise<'info>) -> Msg<'info> -> Model<'info> -> Model<'info> * Cmd<Msg<'info>>` | Update with session storage |
-| `Oidc.updateWith` | `Options -> IStorage -> (string -> string -> Promise<'info>) -> Msg<'info> -> Model<'info> -> Model<'info> * Cmd<Msg<'info>>` | Update with custom storage |
-| `Oidc.subscribe` | `Model<'info> -> Sub<Msg<'info>>` | Renewal timer subscription |
-| `Oidc.tryGetSession` | `Model<'info> -> Session<'info> option` | Get session if authenticated |
-| `Oidc.isAuthenticated` | `Model<'info> -> bool` | Check auth status |
-| `Oidc.tryGetAccessToken` | `Model<'info> -> string option` | Get access token |
+#### Platform-aware (all platforms)
+
+| Function | Description |
+|---|---|
+| `Oidc.initPlatform platform opts` | Initialize with explicit platform |
+| `Oidc.updatePlatform platform opts getUserInfo msg model` | Update with explicit platform |
+| `Oidc.subscribePlatform platform model` | Renewal timer subscription |
+
+#### Browser convenience (backward compat)
+
+| Function | Description |
+|---|---|
+| `Oidc.init opts` | Initialize with browser defaults |
+| `Oidc.update opts getUserInfo msg model` | Update with browser defaults |
+| `Oidc.subscribe model` | Renewal timer subscription |
+
+#### Model queries (all platforms)
+
+| Function | Description |
+|---|---|
+| `Oidc.tryGetSession model` | Get session if authenticated |
+| `Oidc.isAuthenticated model` | Check auth status |
+| `Oidc.tryGetAccessToken model` | Get access token |
 
 ### Messages
-
-The consumer dispatches `LogIn` and `LogOut`. All other messages are internal:
 
 | Message | Trigger |
 |---|---|
 | `LogIn` | User initiates login — redirects to IdP |
-| `LogOut` | User initiates logout — clears session, redirects to end session endpoint |
+| `LogOut` | User initiates logout — clears session |
