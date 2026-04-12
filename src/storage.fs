@@ -1,5 +1,7 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.Storage
+
+open Elmish.OIDC.Types
 
 #if FABLE_COMPILER
 open Thoth.Json
@@ -49,10 +51,10 @@ let private sessionDecoder: Decoder<TokenResponse> =
           scope = get.Required.Field "scope" Decode.string
           refreshToken = get.Optional.Field "refreshToken" Decode.string })
 
-let saveAuthState (storage: IStorage) (authState: AuthState) =
+let saveAuthState (storage: Storage) (authState: AuthState) =
     storage.setItem AuthStateKey (encodeAuthState authState)
 
-let loadAuthState (storage: IStorage) : AuthState option =
+let loadAuthState (storage: Storage) : AuthState option =
     storage.getItem AuthStateKey
     |> Option.bind (fun json ->
         storage.removeItem AuthStateKey
@@ -60,16 +62,16 @@ let loadAuthState (storage: IStorage) : AuthState option =
         | Ok authState -> Some authState
         | Error _ -> None)
 
-let saveSession (storage: IStorage) (response: TokenResponse) =
+let saveSession (storage: Storage) (response: TokenResponse) =
     storage.setItem SessionKey (encodeSession response)
 
-let loadSession (storage: IStorage) : TokenResponse option =
+let loadSession (storage: Storage) : TokenResponse option =
     storage.getItem SessionKey
     |> Option.bind (fun json ->
         match Decode.fromString sessionDecoder json with
         | Ok response -> Some response
         | Error _ -> None)
 
-let clearAll (storage: IStorage) =
+let clearAll (storage: Storage) =
     storage.removeItem AuthStateKey
     storage.removeItem SessionKey

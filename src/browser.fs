@@ -1,12 +1,13 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.Browser
 
 open System
+open Elmish.OIDC.Types
 open Fable.Core
 open Fable.Core.JsInterop
 
-let BrowserCrypto =
-    { new ICryptoProvider with
+let crypto =
+    { new CryptoProvider with
         member _.randomBytes len =
             let buf = Array.zeroCreate<byte> len
             Interop.Crypto.getRandomValues buf |> ignore
@@ -28,8 +29,8 @@ let BrowserCrypto =
             Interop.Crypto.verify key (Interop.Buffers.toArrayBuffer signature) (Interop.Buffers.toArrayBuffer data)
             |> Async.AwaitPromise }
 
-let BrowserEncoding =
-    { new IEncodingProvider with
+let encoding =
+    { new EncodingProvider with
         member _.utf8Encode (s: string) =
             let ab : JS.ArrayBuffer = Interop.Encoding.toArrayBuffer s
             Interop.Buffers.toBytes ab
@@ -43,8 +44,8 @@ let BrowserEncoding =
         member _.base64Decode (s: string) =
             Interop.Encoding.atobToBytes s }
 
-let BrowserHttp =
-    { new IHttpClient with
+let http =
+    { new HttpClient with
         member _.getText (url: string) =
             async {
                 let! response = Interop.Http.get url |> Async.AwaitPromise
@@ -57,8 +58,8 @@ let BrowserHttp =
                 return! response.text () |> Async.AwaitPromise
             } }
 
-let BrowserNavigation =
-    { new INavigation with
+let navigation =
+    { new Navigation with
         member _.redirect (url: string) =
             Browser.Dom.window.location.href <- url
 
@@ -78,8 +79,8 @@ let BrowserNavigation =
         member _.encodeURIComponent (s: string) =
             Browser.Dom.window.encodeURIComponent s }
 
-let BrowserTimer =
-    { new ITimerProvider with
+let timer =
+    { new TimerProvider with
         member _.createInterval (callback: unit -> unit) (ms: int) =
             let id = Browser.Dom.window.setInterval(callback, ms)
             { new IDisposable with
@@ -91,7 +92,7 @@ let BrowserTimer =
                 member _.Dispose() = Browser.Dom.window.clearTimeout id } }
 
 let private makeStorage (storage: Browser.Types.Storage) =
-    { new IStorage with
+    { new Storage with
         member _.getItem key =
             storage.[key] |> Option.ofObj
         member _.setItem key value =
@@ -99,10 +100,10 @@ let private makeStorage (storage: Browser.Types.Storage) =
         member _.removeItem key =
             storage.removeItem key }
 
-let BrowserSessionStorage = makeStorage Browser.Dom.window.sessionStorage
+let sessionStorage = makeStorage Browser.Dom.window.sessionStorage
 
-let BrowserLocalStorage = makeStorage Browser.Dom.window.localStorage
+let localStorage = makeStorage Browser.Dom.window.localStorage
 
-let ensureBrowserCrypto () =
+let ensureCrypto () =
     if not (Interop.Crypto.isAvailable ()) then
         failwith "OIDC requires a secure context (HTTPS or localhost) for Web Crypto API"

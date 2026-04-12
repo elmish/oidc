@@ -1,6 +1,7 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.Renewal
 
+open Elmish.OIDC.Types
 open System
 
 #if FABLE_COMPILER
@@ -12,7 +13,7 @@ let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
 #if FABLE_COMPILER
-let private buildSilentAuthorizeUrl (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
+let private buildSilentAuthorizeUrl (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
     let encode = nav.encodeURIComponent
     let scopes = opts.scopes |> String.concat " "
     let redirectUri =
@@ -30,25 +31,25 @@ let private buildSilentAuthorizeUrl (nav: INavigation) (doc: DiscoveryDocument) 
     + "&code_challenge_method=" + encode "S256"
     + "&prompt=" + encode "none"
 
-let BrowserRenewal (platform: Platform) =
-    { new IRenewalStrategy with
+let browser (platform: Platform) =
+    { new RenewalStrategy with
         member _.renew doc opts jwks storage =
             match opts.silentRedirectUri with
             | None ->
                 async { return Error (InvalidToken "silentRedirectUri is not configured") }
             | Some silentUri ->
                 async {
-                    let state = generateState platform.crypto platform.encoding
-                    let nonce = generateNonce platform.crypto platform.encoding
-                    let verifier = generateCodeVerifier platform.crypto platform.encoding
-                    let! challenge = computeCodeChallenge platform.crypto platform.encoding verifier
+                    let state = Crypto.generateState platform.crypto platform.encoding
+                    let nonce = Crypto.generateNonce platform.crypto platform.encoding
+                    let verifier = Crypto.generateCodeVerifier platform.crypto platform.encoding
+                    let! challenge = Crypto.computeCodeChallenge platform.crypto platform.encoding verifier
 
                     let authState =
                         { state = state
                           nonce = nonce
                           codeVerifier = verifier
                           redirectUri = silentUri }
-                    saveAuthState storage authState
+                    Storage.saveAuthState storage authState
 
                     let url = buildSilentAuthorizeUrl platform.navigation doc opts state nonce challenge
                     let window = Browser.Dom.window
@@ -87,10 +88,10 @@ let BrowserRenewal (platform: Platform) =
                                         | None ->
                                             match Interop.UrlSearchParams.tryGet "code" ps, Interop.UrlSearchParams.tryGet "state" ps with
                                             | Some code, Some returnedState when returnedState = state ->
-                                                exchangeCode platform doc opts.clientId code verifier silentUri
+                                                Token.exchangeCode platform doc opts.clientId code verifier silentUri
                                                 |> Async.StartAsPromise
                                                 |> Promise.bind (fun response ->
-                                                    validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks
+                                                    Token.validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks
                                                     |> Async.StartAsPromise
                                                     |> Promise.map (fun result ->
                                                         match result with
@@ -116,5 +117,5 @@ let BrowserRenewal (platform: Platform) =
                 } }
 #endif
 
-let tokenExpirySubscription (timer: ITimerProvider) (dispatch: Msg<'info> -> unit) : IDisposable =
+let expirySubscription (timer: TimerProvider) (dispatch: Msg<'info> -> unit) : IDisposable =
     timer.createInterval (fun () -> dispatch Tick) 30000

@@ -1,11 +1,13 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.Crypto
 
-let base64UrlEncode (encoding: IEncodingProvider) (bytes: byte[]) : string =
+open Elmish.OIDC.Types
+
+let base64UrlEncode (encoding: EncodingProvider) (bytes: byte[]) : string =
     encoding.base64Encode bytes
     |> fun s -> s.Replace('+', '-').Replace('/', '_').TrimEnd('=')
 
-let base64UrlDecode (encoding: IEncodingProvider) (s: string) : byte[] =
+let base64UrlDecode (encoding: EncodingProvider) (s: string) : byte[] =
     let padded =
         let r = s.Length % 4
         if r = 0 then s
@@ -13,19 +15,19 @@ let base64UrlDecode (encoding: IEncodingProvider) (s: string) : byte[] =
     padded.Replace('-', '+').Replace('_', '/')
     |> encoding.base64Decode
 
-let randomBytes (crypto: ICryptoProvider) (len: int) : byte[] =
+let randomBytes (crypto: CryptoProvider) (len: int) : byte[] =
     crypto.randomBytes len
 
-let generateState (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+let generateState (crypto: CryptoProvider) (encoding: EncodingProvider) : string =
     randomBytes crypto 32 |> base64UrlEncode encoding
 
-let generateNonce (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+let generateNonce (crypto: CryptoProvider) (encoding: EncodingProvider) : string =
     randomBytes crypto 32 |> base64UrlEncode encoding
 
-let generateCodeVerifier (crypto: ICryptoProvider) (encoding: IEncodingProvider) : string =
+let generateCodeVerifier (crypto: CryptoProvider) (encoding: EncodingProvider) : string =
     randomBytes crypto 32 |> base64UrlEncode encoding
 
-let computeCodeChallenge (crypto: ICryptoProvider) (encoding: IEncodingProvider) (verifier: string) : Async<string> =
+let computeCodeChallenge (crypto: CryptoProvider) (encoding: EncodingProvider) (verifier: string) : Async<string> =
     async {
         let! hash = crypto.sha256 (encoding.utf8Encode verifier)
         return base64UrlEncode encoding hash

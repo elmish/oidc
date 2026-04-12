@@ -1,4 +1,3 @@
-[<AutoOpen>]
 module Elmish.OIDC.Types
 
 open System
@@ -71,48 +70,48 @@ type OidcError =
 
 // Platform abstractions for cross-platform support
 
-type IStorage =
+type Storage =
     abstract getItem: string -> string option
     abstract setItem: string -> string -> unit
     abstract removeItem: string -> unit
 
-type ICryptoProvider =
+type CryptoProvider =
     abstract randomBytes: int -> byte[]
     abstract sha256: byte[] -> Async<byte[]>
     abstract importRsaKey: JwksKey -> Async<obj>
     abstract rsaVerify: key:obj -> signature:byte[] -> data:byte[] -> Async<bool>
 
-type IEncodingProvider =
+type EncodingProvider =
     abstract utf8Encode: string -> byte[]
     abstract utf8Decode: byte[] -> string
     abstract base64Encode: byte[] -> string
     abstract base64Decode: string -> byte[]
 
-type IHttpClient =
+type HttpClient =
     abstract getText: string -> Async<string>
     abstract postForm: string -> string -> Async<string>
 
-type INavigation =
+type Navigation =
     abstract redirect: string -> unit
     abstract getCallbackParams: unit -> (string * string) option
     abstract clearCallbackParams: unit -> unit
     abstract encodeURIComponent: string -> string
 
-type IRenewalStrategy =
-    abstract renew: DiscoveryDocument -> Options -> Jwks -> IStorage -> Async<Result<JwtPayload * TokenResponse, OidcError>>
+type RenewalStrategy =
+    abstract renew: DiscoveryDocument -> Options -> Jwks -> Storage -> Async<Result<JwtPayload * TokenResponse, OidcError>>
 
-type ITimerProvider =
+type TimerProvider =
     abstract createInterval: (unit -> unit) -> int -> IDisposable
     abstract createTimeout: (unit -> unit) -> int -> IDisposable
 
 type Platform =
-    { crypto: ICryptoProvider
-      encoding: IEncodingProvider
-      http: IHttpClient
-      navigation: INavigation
-      renewal: IRenewalStrategy
-      storage: IStorage
-      timer: ITimerProvider }
+    { crypto: CryptoProvider
+      encoding: EncodingProvider
+      http: HttpClient
+      navigation: Navigation
+      renewal: RenewalStrategy
+      storage: Storage
+      timer: TimerProvider }
 
 type Session<'info> =
     { accessToken: string

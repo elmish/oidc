@@ -1,15 +1,14 @@
 module Tests.Helpers
 
+open Elmish.OIDC
 open Elmish.OIDC.Types
-open Elmish.OIDC.Storage
-open Elmish.OIDC.Browser
 open Fable.Core
 open Fable.Core.JsInterop
 open Thoth.Json
 
 type MemoryStorage() =
     let mutable store = Map.empty<string, string>
-    interface IStorage with
+    interface Storage with
         member _.getItem key =
             store |> Map.tryFind key
         member _.setItem key value =
@@ -38,20 +37,20 @@ let testDiscoveryDoc : DiscoveryDocument =
       jwksUri = "https://auth.example.com/.well-known/jwks.json"
       endSessionEndpoint = Some "https://auth.example.com/logout" }
 
-let testPlatform (storage: IStorage) : Platform =
+let testPlatform (storage: Storage) : Platform =
     let platform =
-        { crypto = BrowserCrypto
-          encoding = BrowserEncoding
-          http = BrowserHttp
-          navigation = BrowserNavigation
-          renewal = Unchecked.defaultof<IRenewalStrategy>
+        { crypto = Browser.crypto
+          encoding = Browser.encoding
+          http = Browser.http
+          navigation = Browser.navigation
+          renewal = Unchecked.defaultof<RenewalStrategy>
           storage = storage
-          timer = BrowserTimer }
-    { platform with renewal = Elmish.OIDC.Renewal.BrowserRenewal platform }
+          timer = Browser.timer }
+    { platform with renewal = Elmish.OIDC.Renewal.browser platform }
 
 let jsonToBase64Url (json: string) : string =
     let bytes : byte[] = Fable.Core.JsInterop.emitJsExpr json "new TextEncoder().encode($0)"
-    Elmish.OIDC.Crypto.base64UrlEncode BrowserEncoding bytes
+    Elmish.OIDC.Crypto.base64UrlEncode Browser.encoding bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

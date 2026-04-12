@@ -2,6 +2,7 @@ module Tests.StateTests
 
 open Fable.Mocha
 open Elmish.OIDC
+open Elmish.OIDC.Types
 open Tests.Helpers
 
 let private tryGetSession (model: Model<'info>) : Session<'info> option =
@@ -22,7 +23,7 @@ let private testSession () : Session<string> =
       claims = { iss = "https://auth.example.com"; sub = "user"; aud = ["client"]; exp = 0L; iat = 0L; nonce = None }
       userInfo = None }
 
-let private updateWith (storage: IStorage) msg model =
+let private updateWith (storage: Storage) msg model =
     let plt = testPlatform storage
     State.update plt testOptions (fun _ _ -> async { return "info" }) msg model
 
@@ -30,14 +31,14 @@ let tests = testList "State" [
 
     testList "CSRF state validation" [
         testCase "mismatched callback state is rejected" <| fun _ ->
-            let storage = MemoryStorage() :> IStorage
+            let storage = MemoryStorage() :> Storage
             let authState : AuthState =
                 { state = "expected-state"
                   nonce = "test-nonce"
                   codeVerifier = "test-verifier"
                   redirectUri = "https://app.example.com/callback" }
-            saveAuthState storage authState
-            let loaded = loadAuthState storage
+            Storage.saveAuthState storage authState
+            let loaded = Storage.loadAuthState storage
             match loaded with
             | Some s ->
                 Expect.isFalse (s.state = "wrong-state") "mismatched states must not match"
@@ -45,14 +46,14 @@ let tests = testList "State" [
                 failwith "auth state should be loaded"
 
         testCase "matching callback state is accepted" <| fun _ ->
-            let storage = MemoryStorage() :> IStorage
+            let storage = MemoryStorage() :> Storage
             let authState : AuthState =
                 { state = "correct-state"
                   nonce = "test-nonce"
                   codeVerifier = "test-verifier"
                   redirectUri = "https://app.example.com/callback" }
-            saveAuthState storage authState
-            let loaded = loadAuthState storage
+            Storage.saveAuthState storage authState
+            let loaded = Storage.loadAuthState storage
             match loaded with
             | Some s ->
                 Expect.isTrue (s.state = "correct-state") "matching states should be equal"
@@ -60,17 +61,17 @@ let tests = testList "State" [
                 failwith "auth state should be loaded"
 
         testCase "auth state is consumed on load (prevents replay)" <| fun _ ->
-            let storage = MemoryStorage() :> IStorage
-            saveAuthState storage
+            let storage = MemoryStorage() :> Storage
+            Storage.saveAuthState storage
                 { state = "one-time"; nonce = "n"; codeVerifier = "v"; redirectUri = "https://x" }
-            let _first = loadAuthState storage
-            Expect.isNone (loadAuthState storage) "second load must return None"
+            let _first = Storage.loadAuthState storage
+            Expect.isNone (Storage.loadAuthState storage) "second load must return None"
     ]
 
     testList "update transitions" [
         testCase "DiscoveryFailed produces Failed model" <| fun _ ->
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     (DiscoveryFailed (exn "network error"))
                     Initializing
             match model with
@@ -78,8 +79,8 @@ let tests = testList "State" [
             | _ -> failwith "should be Failed(DiscoveryError)"
 
         testCase "ValidationFailed in Ready clears storage and returns Unauthenticated" <| fun _ ->
-            let storage = MemoryStorage() :> IStorage
-            saveSession storage
+            let storage = MemoryStorage() :> Storage
+            Storage.saveSession storage
                 { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None }
             let model, _cmd =
                 updateWith storage
@@ -87,12 +88,12 @@ let tests = testList "State" [
                     (Ready (testDiscoveryDoc, { keys = [] }, ValidatingToken))
             match model with
             | Ready (_, _, Unauthenticated) ->
-                Expect.isNone (loadSession storage) "session should be cleared"
+                Expect.isNone (Storage.loadSession storage) "session should be cleared"
             | _ -> failwith "should be Ready(Unauthenticated)"
 
         testCase "LoggedOut returns Unauthenticated" <| fun _ ->
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     LoggedOut
                     (Ready (testDiscoveryDoc, { keys = [] }, Unauthenticated))
             match model with
@@ -102,7 +103,7 @@ let tests = testList "State" [
         testCase "Tick when not near expiry stays Authenticated" <| fun _ ->
             let session = { testSession () with expiresAt = System.DateTimeOffset.UtcNow.AddHours(1.0) }
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Authenticated session))
             match model with
@@ -112,7 +113,7 @@ let tests = testList "State" [
         testCase "Tick when near expiry transitions to Renewing" <| fun _ ->
             let session = { testSession () with expiresAt = System.DateTimeOffset.UtcNow.AddSeconds(10.0) }
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Authenticated session))
             match model with
@@ -122,7 +123,7 @@ let tests = testList "State" [
         testCase "Tick during Renewing is ignored" <| fun _ ->
             let session = testSession ()
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     Tick
                     (Ready (testDiscoveryDoc, { keys = [] }, Renewing session))
             match model with
@@ -131,7 +132,7 @@ let tests = testList "State" [
 
         testCase "unexpected message in wrong state is ignored" <| fun _ ->
             let model, _cmd =
-                updateWith (MemoryStorage() :> IStorage)
+                updateWith (MemoryStorage() :> Storage)
                     (TokenReceived { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None })
                     Initializing
             match model with

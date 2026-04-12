@@ -1,6 +1,7 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.State
 
+open Elmish.OIDC.Types
 open System
 open Elmish
 
@@ -10,7 +11,7 @@ let mutable private pendingNonce : string option = None
 let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
-let private buildAuthorizeUrl (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
+let private buildAuthorizeUrl (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
     let encode = nav.encodeURIComponent
     let scopes = opts.scopes |> String.concat " "
     doc.authorizationEndpoint
@@ -36,23 +37,23 @@ let private startLoginCmd (platform: Platform) (doc: DiscoveryDocument) (opts: O
     Cmd.OfAsync.attempt
         (fun () ->
             async {
-                let state = generateState platform.crypto platform.encoding
-                let nonce = generateNonce platform.crypto platform.encoding
-                let verifier = generateCodeVerifier platform.crypto platform.encoding
-                let! challenge = computeCodeChallenge platform.crypto platform.encoding verifier
+                let state = Crypto.generateState platform.crypto platform.encoding
+                let nonce = Crypto.generateNonce platform.crypto platform.encoding
+                let verifier = Crypto.generateCodeVerifier platform.crypto platform.encoding
+                let! challenge = Crypto.computeCodeChallenge platform.crypto platform.encoding verifier
                 let authState =
                     { state = state
                       nonce = nonce
                       codeVerifier = verifier
                       redirectUri = opts.redirectUri }
-                saveAuthState platform.storage authState
+                Storage.saveAuthState platform.storage authState
                 let url = buildAuthorizeUrl platform.navigation doc opts state nonce challenge
                 platform.navigation.redirect url
             })
         ()
         (fun ex -> ValidationFailed (NetworkError ex))
 
-let private logoutCmd (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (idTokenHint: string option) : Cmd<Msg<'info>> =
+let private logoutCmd (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (idTokenHint: string option) : Cmd<Msg<'info>> =
     let encode = nav.encodeURIComponent
     match doc.endSessionEndpoint, opts.postLogoutRedirectUri with
     | Some endpoint, Some postLogoutUri ->
@@ -71,13 +72,13 @@ let private logoutCmd (nav: INavigation) (doc: DiscoveryDocument) (opts: Options
         Cmd.ofMsg LoggedOut
 
 let init (platform: Platform) (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
-    Initializing, Cmd.OfAsync.either (fetchDiscovery platform.http) opts.authority DiscoveryLoaded DiscoveryFailed
+    Initializing, Cmd.OfAsync.either (Discovery.fetch platform.http) opts.authority DiscoveryLoaded DiscoveryFailed
 
 let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
     match model, msg with
     | Initializing, DiscoveryLoaded doc ->
         pendingDiscovery <- Some doc
-        Initializing, Cmd.OfAsync.either (fetchJwks platform.http) doc.jwksUri JwksLoaded JwksFailed
+        Initializing, Cmd.OfAsync.either (Token.fetchJwks platform.http) doc.jwksUri JwksLoaded JwksFailed
 
     | Initializing, JwksLoaded jwks ->
         match pendingDiscovery with
@@ -86,23 +87,23 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
             match platform.navigation.getCallbackParams () with
             | Some (code, callbackState) ->
                 platform.navigation.clearCallbackParams ()
-                match loadAuthState platform.storage with
+                match Storage.loadAuthState platform.storage with
                 | Some authState when authState.state = callbackState ->
                     pendingNonce <- Some authState.nonce
                     Ready (doc, jwks, ExchangingCode),
                     Cmd.OfAsync.either
-                        (fun () -> exchangeCode platform doc opts.clientId code authState.codeVerifier authState.redirectUri)
+                        (fun () -> Token.exchangeCode platform doc opts.clientId code authState.codeVerifier authState.redirectUri)
                         ()
                         TokenReceived
                         (fun ex -> ValidationFailed (TokenExchangeFailed ex.Message))
                 | _ ->
                     Ready (doc, jwks, Unauthenticated), Cmd.none
             | None ->
-                match loadSession platform.storage with
+                match Storage.loadSession platform.storage with
                 | Some response ->
                     Ready (doc, jwks, ValidatingToken),
                     Cmd.OfAsync.either
-                        (fun () -> revalidateStoredToken platform opts (nowEpoch ()) response.idToken jwks)
+                        (fun () -> Token.revalidateStoredToken platform opts (nowEpoch ()) response.idToken jwks)
                         ()
                         (fun result ->
                             match result with
@@ -120,7 +121,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
             pendingNonce <- None
             Ready (doc, jwks, ValidatingToken),
             Cmd.OfAsync.either
-                (fun () -> validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks)
+                (fun () -> Token.validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks)
                 ()
                 (fun result ->
                     match result with
@@ -134,7 +135,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
         let session = buildSession response payload
         Ready (doc, jwks, Authenticated session),
         Cmd.batch [
-            Cmd.OfFunc.attempt (saveSession platform.storage) response (fun _ -> NoSession)
+            Cmd.OfFunc.attempt (Storage.saveSession platform.storage) response (fun _ -> NoSession)
             Cmd.OfAsync.either
                 (fun () -> getUserInfo doc.userinfoEndpoint session.accessToken)
                 ()
@@ -143,7 +144,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
         ]
 
     | Ready (doc, jwks, _), ValidationFailed _ ->
-        clearAll platform.storage
+        Storage.clearAll platform.storage
         Ready (doc, jwks, Unauthenticated), Cmd.none
 
     | Ready (doc, jwks, Authenticated session), UserInfo info ->
@@ -170,7 +171,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
     | Ready (doc, jwks, Renewing session), SilentRenewResult (Ok (payload, response)) ->
         let newSession = buildSession response payload
         Ready (doc, jwks, Authenticated { newSession with userInfo = session.userInfo }),
-        Cmd.OfFunc.attempt (saveSession platform.storage) response (fun _ -> NoSession)
+        Cmd.OfFunc.attempt (Storage.saveSession platform.storage) response (fun _ -> NoSession)
 
     | Ready (doc, jwks, Renewing session), SilentRenewResult (Error _) ->
         Ready (doc, jwks, Authenticated session), Cmd.none
@@ -179,7 +180,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
         Ready (doc, jwks, Redirecting), startLoginCmd platform doc opts
 
     | Ready (doc, jwks, readyState), LogOut ->
-        clearAll platform.storage
+        Storage.clearAll platform.storage
         let idTokenHint =
             match readyState with
             | Authenticated session -> Some session.idToken

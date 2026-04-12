@@ -1,4 +1,3 @@
-[<AutoOpen>]
 module internal Elmish.OIDC.Interop
 
 open Fable.Core

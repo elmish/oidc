@@ -1,5 +1,7 @@
-[<AutoOpen>]
+[<RequireQualifiedAccess>]
 module Elmish.OIDC.Token
+
+open Elmish.OIDC.Types
 
 #if FABLE_COMPILER
 open Thoth.Json
@@ -7,7 +9,7 @@ open Thoth.Json
 open Thoth.Json.Net
 #endif
 
-let private tokenResponseDecoder : Decoder<TokenResponse> =
+let private responseDecoder : Decoder<TokenResponse> =
     Decode.object (fun get ->
         { accessToken = get.Required.Field "access_token" Decode.string
           idToken = get.Required.Field "id_token" Decode.string
@@ -16,7 +18,7 @@ let private tokenResponseDecoder : Decoder<TokenResponse> =
           scope = get.Required.Field "scope" Decode.string
           refreshToken = get.Optional.Field "refresh_token" Decode.string })
 
-let private tokenErrorDecoder : Decoder<string> =
+let private errorDecoder : Decoder<string> =
     Decode.object (fun get ->
         let error = get.Required.Field "error" Decode.string
         let desc = get.Optional.Field "error_description" Decode.string
@@ -69,15 +71,15 @@ let exchangeCode (platform: Platform) (doc: DiscoveryDocument) (clientId: string
 
     async {
         let! text = platform.http.postForm doc.tokenEndpoint body
-        match Decode.fromString tokenErrorDecoder text with
+        match Decode.fromString errorDecoder text with
         | Ok errMsg -> return failwith errMsg
         | Error _ ->
-            match Decode.fromString tokenResponseDecoder text with
+            match Decode.fromString responseDecoder text with
             | Ok resp -> return resp
             | Error err -> return failwith $"Failed to decode token response: {err}"
     }
 
-let fetchJwks (http: IHttpClient) (jwksUri: string) : Async<Jwks> =
+let fetchJwks (http: HttpClient) (jwksUri: string) : Async<Jwks> =
     async {
         let! text = http.getText jwksUri
         match Decode.fromString jwksDecoder text with
@@ -85,14 +87,14 @@ let fetchJwks (http: IHttpClient) (jwksUri: string) : Async<Jwks> =
         | Error err -> return failwith $"Failed to decode JWKS: {err}"
     }
 
-let decodeJwt (encoding: IEncodingProvider) (jwt: string) : Result<JwtHeader * JwtPayload, string> =
+let decodeJwt (encoding: EncodingProvider) (jwt: string) : Result<JwtHeader * JwtPayload, string> =
     let parts = jwt.Split('.')
 
     if parts.Length <> 3 then
         Error "JWT must have exactly 3 parts"
     else
-        let headerJson = parts.[0] |> base64UrlDecode encoding |> encoding.utf8Decode
-        let payloadJson = parts.[1] |> base64UrlDecode encoding |> encoding.utf8Decode
+        let headerJson = parts.[0] |> Crypto.base64UrlDecode encoding |> encoding.utf8Decode
+        let payloadJson = parts.[1] |> Crypto.base64UrlDecode encoding |> encoding.utf8Decode
 
         match Decode.fromString jwtHeaderDecoder headerJson, Decode.fromString jwtPayloadDecoder payloadJson with
         | Ok header, Ok payload -> Ok(header, payload)
@@ -102,7 +104,7 @@ let decodeJwt (encoding: IEncodingProvider) (jwt: string) : Result<JwtHeader * J
 let verifySignature (platform: Platform) (key: obj) (jwt: string) : Async<bool> =
     let parts = jwt.Split('.')
     let signedData = parts.[0] + "." + parts.[1]
-    let signatureBytes = base64UrlDecode platform.encoding parts.[2]
+    let signatureBytes = Crypto.base64UrlDecode platform.encoding parts.[2]
     let dataBytes = platform.encoding.utf8Encode signedData
     platform.crypto.rsaVerify key signatureBytes dataBytes
 

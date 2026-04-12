@@ -1,31 +1,32 @@
 namespace Elmish.OIDC
 
 open Elmish
+open Elmish.OIDC.Types
 
 module Oidc =
 
 #if FABLE_COMPILER
     let createBrowserPlatform () : Platform =
         let platform =
-            { crypto = BrowserCrypto
-              encoding = BrowserEncoding
-              http = BrowserHttp
-              navigation = BrowserNavigation
-              renewal = Unchecked.defaultof<IRenewalStrategy>
-              storage = BrowserSessionStorage
-              timer = BrowserTimer }
-        { platform with renewal = BrowserRenewal platform }
+            { crypto = Browser.crypto
+              encoding = Browser.encoding
+              http = Browser.http
+              navigation = Browser.navigation
+              renewal = Unchecked.defaultof<RenewalStrategy>
+              storage = Browser.sessionStorage
+              timer = Browser.timer }
+        { platform with renewal = Renewal.browser platform }
 
-    let createBrowserPlatformWith (storage: IStorage) : Platform =
+    let createBrowserPlatformWith (storage: Storage) : Platform =
         let platform =
-            { crypto = BrowserCrypto
-              encoding = BrowserEncoding
-              http = BrowserHttp
-              navigation = BrowserNavigation
-              renewal = Unchecked.defaultof<IRenewalStrategy>
+            { crypto = Browser.crypto
+              encoding = Browser.encoding
+              http = Browser.http
+              navigation = Browser.navigation
+              renewal = Unchecked.defaultof<RenewalStrategy>
               storage = storage
-              timer = BrowserTimer }
-        { platform with renewal = BrowserRenewal platform }
+              timer = Browser.timer }
+        { platform with renewal = Renewal.browser platform }
 #endif
 
     // Platform-aware API
@@ -40,7 +41,7 @@ module Oidc =
         match model with
         | Ready (_, _, Authenticated _)
         | Ready (_, _, Renewing _) ->
-            [ ["oidc"; "renewal"], tokenExpirySubscription platform.timer ]
+            [ ["oidc"; "renewal"], Renewal.expirySubscription platform.timer ]
         | _ -> []
 
     // Browser convenience API (backward compat)
@@ -49,13 +50,13 @@ module Oidc =
     let init (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
         initPlatform (createBrowserPlatform ()) opts
 
-    let initWith (opts: Options) (storage: IStorage) : Model<'info> * Cmd<Msg<'info>> =
+    let initWith (opts: Options) (storage: Storage) : Model<'info> * Cmd<Msg<'info>> =
         initPlatform (createBrowserPlatformWith storage) opts
 
     let update (opts: Options) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
         updatePlatform (createBrowserPlatform ()) opts getUserInfo msg model
 
-    let updateWith (opts: Options) (storage: IStorage) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
+    let updateWith (opts: Options) (storage: Storage) (getUserInfo: string -> string -> Async<'info>) (msg: Msg<'info>) (model: Model<'info>) : Model<'info> * Cmd<Msg<'info>> =
         updatePlatform (createBrowserPlatformWith storage) opts getUserInfo msg model
 
     let subscribe (model: Model<'info>) : Sub<Msg<'info>> =
