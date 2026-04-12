@@ -1,7 +1,11 @@
 [<AutoOpen>]
 module Elmish.OIDC.Storage
 
+#if FABLE_COMPILER
 open Thoth.Json
+#else
+open Thoth.Json.Net
+#endif
 
 [<Literal>]
 let AuthStateKey = "oidc:auth_state"

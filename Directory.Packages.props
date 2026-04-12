@@ -11,6 +11,8 @@
     <PackageVersion Include="Fable.Elmish" Version="5.*" />
     <PackageVersion Include="Fable.Browser.Dom" Version="2.*" />
     <PackageVersion Include="Thoth.Json" Version="6.*" />
+    <PackageVersion Include="Thoth.Json.Net" Version="6.*" />
+    <PackageVersion Include="Elmish" Version="4.*" />
     <PackageVersion Include="Fable.Mocha" Version="2.*" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="1.0.0" />
   </ItemGroup>

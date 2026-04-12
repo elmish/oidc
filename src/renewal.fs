@@ -2,12 +2,16 @@
 module Elmish.OIDC.Renewal
 
 open System
+
+#if FABLE_COMPILER
 open Fable.Core
 open Fable.Core.JsInterop
+#endif
 
 let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
+#if FABLE_COMPILER
 let private buildSilentAuthorizeUrl (nav: INavigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
     let encode = nav.encodeURIComponent
     let scopes = opts.scopes |> String.concat " "
@@ -110,6 +114,7 @@ let BrowserRenewal (platform: Platform) =
                             ), 10000))
                         |> Async.AwaitPromise
                 } }
+#endif
 
 let tokenExpirySubscription (timer: ITimerProvider) (dispatch: Msg<'info> -> unit) : IDisposable =
     timer.createInterval (fun () -> dispatch Tick) 30000

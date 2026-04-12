@@ -1,7 +1,11 @@
 [<AutoOpen>]
 module Elmish.OIDC.Token
 
+#if FABLE_COMPILER
 open Thoth.Json
+#else
+open Thoth.Json.Net
+#endif
 
 let private tokenResponseDecoder : Decoder<TokenResponse> =
     Decode.object (fun get ->

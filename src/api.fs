@@ -4,6 +4,7 @@ open Elmish
 
 module Oidc =
 
+#if FABLE_COMPILER
     let createBrowserPlatform () : Platform =
         let platform =
             { crypto = BrowserCrypto
@@ -25,6 +26,7 @@ module Oidc =
               storage = storage
               timer = BrowserTimer }
         { platform with renewal = BrowserRenewal platform }
+#endif
 
     // Platform-aware API
 
@@ -43,6 +45,7 @@ module Oidc =
 
     // Browser convenience API (backward compat)
 
+#if FABLE_COMPILER
     let init (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
         initPlatform (createBrowserPlatform ()) opts
 
@@ -57,6 +60,7 @@ module Oidc =
 
     let subscribe (model: Model<'info>) : Sub<Msg<'info>> =
         subscribePlatform (createBrowserPlatform ()) model
+#endif
 
     // Model query helpers (platform-independent)
 
