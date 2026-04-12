@@ -87,6 +87,25 @@ let fetchJwks (http: HttpClient) (jwksUri: string) : Async<Jwks> =
         | Error err -> return failwith $"Failed to decode JWKS: {err}"
     }
 
+let exchangeRefreshToken (platform: Platform) (doc: DiscoveryDocument) (clientId: string) (refreshToken: string) : Async<TokenResponse> =
+    let encode = platform.navigation.encodeURIComponent
+    let body =
+        [ "grant_type", "refresh_token"
+          "refresh_token", refreshToken
+          "client_id", clientId ]
+        |> List.map (fun (k, v) -> $"{encode k}={encode v}")
+        |> String.concat "&"
+
+    async {
+        let! text = platform.http.postForm doc.tokenEndpoint body
+        match Decode.fromString errorDecoder text with
+        | Ok errMsg -> return failwith errMsg
+        | Error _ ->
+            match Decode.fromString responseDecoder text with
+            | Ok resp -> return resp
+            | Error err -> return failwith $"Failed to decode token response: {err}"
+    }
+
 let decodeJwt (encoding: EncodingProvider) (jwt: string) : Result<JwtHeader * JwtPayload, string> =
     let parts = jwt.Split('.')
 

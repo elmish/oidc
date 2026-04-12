@@ -7,13 +7,15 @@ let base64UrlEncode (encoding: EncodingProvider) (bytes: byte[]) : string =
     encoding.base64Encode bytes
     |> fun s -> s.Replace('+', '-').Replace('/', '_').TrimEnd('=')
 
-let base64UrlDecode (encoding: EncodingProvider) (s: string) : byte[] =
+let base64UrlToBase64 (s: string) : string =
     let padded =
         let r = s.Length % 4
         if r = 0 then s
         else s + System.String('=', 4 - r)
     padded.Replace('-', '+').Replace('_', '/')
-    |> encoding.base64Decode
+
+let base64UrlDecode (encoding: EncodingProvider) (s: string) : byte[] =
+    base64UrlToBase64 s |> encoding.base64Decode
 
 let randomBytes (crypto: CryptoProvider) (len: int) : byte[] =
     crypto.randomBytes len

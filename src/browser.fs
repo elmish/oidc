@@ -17,7 +17,7 @@ let crypto =
             async {
                 let ab = Interop.Buffers.toArrayBuffer data
                 let! result =
-                    emitJsExpr ab "crypto.subtle.digest('SHA-256', $0)"
+                    emitJsExpr ab "globalThis.crypto.subtle.digest('SHA-256', $0)"
                     |> Async.AwaitPromise
                 return Interop.Buffers.toBytes result
             }

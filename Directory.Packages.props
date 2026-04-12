@@ -14,6 +14,7 @@
     <PackageVersion Include="Thoth.Json.Net" Version="6.*" />
     <PackageVersion Include="Elmish" Version="4.*" />
     <PackageVersion Include="Fable.Mocha" Version="2.*" />
+    <PackageVersion Include="Expecto" Version="10.*" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="1.0.0" />
   </ItemGroup>
 </Project>

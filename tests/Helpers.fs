@@ -82,12 +82,12 @@ let generateTestKeyPair () : JS.Promise<obj * JwksKey> =
     emitJsExpr
         ()
         """(async () => {
-            const keyPair = await crypto.subtle.generateKey(
+            const keyPair = await globalThis.crypto.subtle.generateKey(
                 { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
                 true,
                 ['sign', 'verify']
             );
-            const pubJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+            const pubJwk = await globalThis.crypto.subtle.exportKey('jwk', keyPair.publicKey);
             return [keyPair.privateKey, { kty: pubJwk.kty, kid: 'test-kid-1', n: pubJwk.n, e: pubJwk.e, alg: 'RS256', use: 'sig' }];
         })()"""
 
@@ -99,7 +99,7 @@ let signJwt (privateKey: obj) (headerJson: string) (payloadJson: string) : JS.Pr
         (privateKey, signingInput)
         """(async () => {
             const data = new TextEncoder().encode($1);
-            const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', $0, data);
+            const sig = await globalThis.crypto.subtle.sign('RSASSA-PKCS1-v1_5', $0, data);
             const bytes = new Uint8Array(sig);
             let binary = '';
             for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);

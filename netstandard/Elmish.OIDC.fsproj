@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Elmish OIDC client for .NET apps</Description>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net9.0</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../src/types.fs" />
@@ -10,6 +10,9 @@
     <Compile Include="../src/token.fs" />
     <Compile Include="../src/storage.fs" />
     <Compile Include="../src/renewal.fs" />
+    <Compile Include="../src/dotnet.fs" />
+    <Compile Include="../src/dotnet.navigation.fs" />
+    <Compile Include="../src/dotnet.renewal.fs" />
     <Compile Include="../src/state.fs" />
     <Compile Include="../src/api.fs" />
   </ItemGroup>

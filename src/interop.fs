@@ -6,16 +6,16 @@ open Browser.Types
 
 module Crypto =
 
-    [<Emit("crypto.getRandomValues($0)")>]
+    [<Emit("globalThis.crypto.getRandomValues($0)")>]
     let getRandomValues (_buf: byte[]) : byte[] = jsNative
 
-    [<Emit("crypto.subtle.digest('SHA-256', new TextEncoder().encode($0))")>]
+    [<Emit("globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode($0))")>]
     let sha256Digest (_input: string) : JS.Promise<JS.ArrayBuffer> = jsNative
 
-    [<Emit("crypto.subtle.importKey('jwk', {kty: $0.kty, n: $0.n, e: $0.e, alg: $0.alg, ext: true}, {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'}, false, ['verify'])")>]
+    [<Emit("globalThis.crypto.subtle.importKey('jwk', {kty: $0.kty, n: $0.n, e: $0.e, alg: $0.alg, ext: true}, {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'}, false, ['verify'])")>]
     let importJwk (_key: obj) : JS.Promise<obj> = jsNative
 
-    [<Emit("crypto.subtle.verify('RSASSA-PKCS1-v1_5', $0, $1, $2)")>]
+    [<Emit("globalThis.crypto.subtle.verify('RSASSA-PKCS1-v1_5', $0, $1, $2)")>]
     let verify (_key: obj) (_signature: JS.ArrayBuffer) (_data: JS.ArrayBuffer) : JS.Promise<bool> = jsNative
 
     let isAvailable () =
