@@ -51,7 +51,8 @@ let tests = testList "Storage" [
                   idToken = "id-token-456"
                   tokenType = "Bearer"
                   expiresIn = 3600
-                  scope = "openid profile" }
+                  scope = "openid profile"
+                  refreshToken = None }
             saveSession storage response
             let loaded = loadSession storage
             match loaded with
@@ -87,7 +88,8 @@ let tests = testList "Storage" [
                   idToken = "id-token-456"
                   tokenType = "Bearer"
                   expiresIn = 3600
-                  scope = "openid profile" }
+                  scope = "openid profile"
+                  refreshToken = None }
             saveAuthState storage authState
             saveSession storage response
             clearAll storage

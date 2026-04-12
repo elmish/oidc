@@ -76,7 +76,7 @@ let tests = testList "State" [
         testCase "ValidationFailed in Ready clears storage and returns Unauthenticated" <| fun _ ->
             let storage = MemoryStorage() :> IStorage
             saveSession storage
-                { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid" }
+                { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None }
             let model, _cmd =
                 update testOptions storage (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
                     (ValidationFailed (InvalidToken "bad"))
@@ -128,7 +128,7 @@ let tests = testList "State" [
         testCase "unexpected message in wrong state is ignored" <| fun _ ->
             let model, _cmd =
                 update testOptions (MemoryStorage() :> IStorage) (fun _ _ -> Fable.Core.JS.Constructors.Promise.resolve "info")
-                    (TokenReceived { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid" })
+                    (TokenReceived { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None })
                     Initializing
             match model with
             | Initializing -> ()

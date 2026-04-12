@@ -3,11 +3,6 @@ module Elmish.OIDC.Storage
 
 open Thoth.Json
 
-type IStorage =
-    abstract getItem: string -> string option
-    abstract setItem: string -> string -> unit
-    abstract removeItem: string -> unit
-
 let private makeStorage (storage: Browser.Types.Storage) =
     { new IStorage with
         member _.getItem key =
@@ -48,7 +43,10 @@ let private encodeSession (response: TokenResponse) =
           "idToken", Encode.string response.idToken
           "tokenType", Encode.string response.tokenType
           "expiresIn", Encode.int response.expiresIn
-          "scope", Encode.string response.scope ]
+          "scope", Encode.string response.scope
+          yield! (match response.refreshToken with
+                  | Some rt -> [ "refreshToken", Encode.string rt ]
+                  | None -> []) ]
     |> Encode.toString 0
 
 let private sessionDecoder: Decoder<TokenResponse> =
@@ -57,7 +55,8 @@ let private sessionDecoder: Decoder<TokenResponse> =
           idToken = get.Required.Field "idToken" Decode.string
           tokenType = get.Required.Field "tokenType" Decode.string
           expiresIn = get.Required.Field "expiresIn" Decode.int
-          scope = get.Required.Field "scope" Decode.string })
+          scope = get.Required.Field "scope" Decode.string
+          refreshToken = get.Optional.Field "refreshToken" Decode.string })
 
 let saveAuthState (storage: IStorage) (authState: AuthState) =
     storage.setItem AuthStateKey (encodeAuthState authState)

@@ -10,7 +10,8 @@ let private tokenResponseDecoder : Decoder<TokenResponse> =
           idToken = get.Required.Field "id_token" Decode.string
           tokenType = get.Required.Field "token_type" Decode.string
           expiresIn = get.Required.Field "expires_in" Decode.int
-          scope = get.Required.Field "scope" Decode.string })
+          scope = get.Required.Field "scope" Decode.string
+          refreshToken = get.Optional.Field "refresh_token" Decode.string })
 
 let private tokenErrorDecoder : Decoder<string> =
     Decode.object (fun get ->

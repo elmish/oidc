@@ -50,7 +50,8 @@ type TokenResponse =
       idToken: string
       tokenType: string
       expiresIn: int
-      scope: string }
+      scope: string
+      refreshToken: string option }
 
 type AuthState =
     { state: string
@@ -67,6 +68,51 @@ type OidcError =
     | Expired
     | ServerError of error:string * description:string
     | NetworkError of exn
+
+// Platform abstractions for cross-platform support
+
+type IStorage =
+    abstract getItem: string -> string option
+    abstract setItem: string -> string -> unit
+    abstract removeItem: string -> unit
+
+type ICryptoProvider =
+    abstract randomBytes: int -> byte[]
+    abstract sha256: byte[] -> Async<byte[]>
+    abstract importRsaKey: JwksKey -> Async<obj>
+    abstract rsaVerify: key:obj -> signature:byte[] -> data:byte[] -> Async<bool>
+
+type IEncodingProvider =
+    abstract utf8Encode: string -> byte[]
+    abstract utf8Decode: byte[] -> string
+    abstract base64Encode: byte[] -> string
+    abstract base64Decode: string -> byte[]
+
+type IHttpClient =
+    abstract getText: string -> Async<string>
+    abstract postForm: string -> string -> Async<string>
+
+type INavigation =
+    abstract redirect: string -> unit
+    abstract getCallbackParams: unit -> (string * string) option
+    abstract clearCallbackParams: unit -> unit
+    abstract encodeURIComponent: string -> string
+
+type IRenewalStrategy =
+    abstract renew: DiscoveryDocument -> Options -> Jwks -> IStorage -> Async<Result<JwtPayload * TokenResponse, OidcError>>
+
+type ITimerProvider =
+    abstract createInterval: (unit -> unit) -> int -> IDisposable
+    abstract createTimeout: (unit -> unit) -> int -> IDisposable
+
+type Platform =
+    { crypto: ICryptoProvider
+      encoding: IEncodingProvider
+      http: IHttpClient
+      navigation: INavigation
+      renewal: IRenewalStrategy
+      storage: IStorage
+      timer: ITimerProvider }
 
 type Session<'info> =
     { accessToken: string
