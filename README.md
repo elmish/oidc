@@ -1,5 +1,8 @@
 Elmish-OIDC
 =======
+[![Build](https://github.com/elmish/OIDC/actions/workflows/ci.yml/badge.svg)](https://github.com/elmish/OIDC/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/Fable.Elmish.OIDC.svg)](https://www.nuget.org/packages/Fable.Elmish.OIDC)
+
 [Authorization Code Flow with PKCE](https://oauth.net/2/pkce/) component for [Elmish](https://github.com/elmish/elmish) applications.
 
 Requires HTTPS (or localhost) — uses the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) for PKCE challenge generation and JWT signature verification.
