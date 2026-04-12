@@ -1,4 +1,3 @@
-#if !FABLE_COMPILER
 [<RequireQualifiedAccess>]
 module Elmish.OIDC.DotNetNavigation
 
@@ -74,4 +73,3 @@ let customScheme () =
 
     // Return nav + setter for the callback params
     nav, (fun code callbackState -> state.callbackParams <- Some (code, callbackState))
-#endif

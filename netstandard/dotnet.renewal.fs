@@ -1,4 +1,3 @@
-#if !FABLE_COMPILER
 [<RequireQualifiedAccess>]
 module Elmish.OIDC.DotNetRenewal
 
@@ -30,4 +29,3 @@ let refreshToken (platform: Platform) =
                         with ex ->
                             return Error (NetworkError ex)
             } }
-#endif

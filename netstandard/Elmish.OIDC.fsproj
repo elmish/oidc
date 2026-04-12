@@ -10,9 +10,9 @@
     <Compile Include="../src/token.fs" />
     <Compile Include="../src/storage.fs" />
     <Compile Include="../src/renewal.fs" />
-    <Compile Include="../src/dotnet.fs" />
-    <Compile Include="../src/dotnet.navigation.fs" />
-    <Compile Include="../src/dotnet.renewal.fs" />
+    <Compile Include="dotnet.fs" />
+    <Compile Include="dotnet.navigation.fs" />
+    <Compile Include="dotnet.renewal.fs" />
     <Compile Include="../src/state.fs" />
     <Compile Include="../src/api.fs" />
   </ItemGroup>

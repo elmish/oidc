@@ -1,4 +1,3 @@
-#if !FABLE_COMPILER
 [<RequireQualifiedAccess>]
 module Elmish.OIDC.DotNet
 
@@ -107,4 +106,3 @@ type MemoryStorage() =
             store <- store |> Map.remove key
 
 let memoryStorage () = MemoryStorage() :> Storage
-#endif
