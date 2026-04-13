@@ -1,4 +1,4 @@
-### 1.0.0-alpha.3
+### 1.0.0-alpha.5
 
 * Multi-platform support — platform abstraction layer for Browser, .NET, and React Native
 * New packages: `Elmish.OIDC` (.NET/WPF/MAUI) and `Fable.Elmish.OIDC.ReactNative` (Expo/RN)

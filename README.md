@@ -186,3 +186,15 @@ let subscribe model =
 |---|---|
 | `LogIn` | User initiates login — redirects to IdP |
 | `LogOut` | User initiates logout — clears session |
+
+## Project structure
+
+Shared source files live in `src/` and are symlinked into platform-specific directories (`netstandard/`, `reactnative/`). This ensures Fable's NuGet package cracker resolves sources correctly when consuming packages.
+
+```
+src/              — shared sources (types, crypto, discovery, token, etc.)
+netstandard/      — .NET platform (symlinks to src/ + dotnet-specific files)
+reactnative/      — React Native platform (symlinks to src/ + RN-specific files)
+```
+
+Symlinks are checked into git (via `.gitattributes`). On a fresh clone they should work on macOS/Linux. On Windows, enable Developer Mode or run `git config core.symlinks true` before cloning.
