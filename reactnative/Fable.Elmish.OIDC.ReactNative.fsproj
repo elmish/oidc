@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <DefineConstants>$(DefineConstants);FABLE_COMPILER;REACT_NATIVE</DefineConstants>
+    <DefineConstants>$(DefineConstants);FABLE_COMPILER</DefineConstants>
     <Description>Elmish OIDC client for React Native apps via Fable</Description>
   </PropertyGroup>
   <ItemGroup>

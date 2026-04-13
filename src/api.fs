@@ -5,7 +5,7 @@ open Elmish.OIDC.Types
 
 module Oidc =
 
-#if FABLE_COMPILER && !REACT_NATIVE
+#if FABLE_COMPILER
     let createBrowserPlatform () : Platform =
         let platform =
             { crypto = Browser.crypto
@@ -46,7 +46,7 @@ module Oidc =
 
     // Browser convenience API (backward compat)
 
-#if FABLE_COMPILER && !REACT_NATIVE
+#if FABLE_COMPILER
     let init (opts: Options) : Model<'info> * Cmd<Msg<'info>> =
         initPlatform (createBrowserPlatform ()) opts
 

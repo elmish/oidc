@@ -4,7 +4,7 @@ module Elmish.OIDC.Renewal
 open Elmish.OIDC.Types
 open System
 
-#if FABLE_COMPILER && !REACT_NATIVE
+#if FABLE_COMPILER
 open Fable.Core
 open Fable.Core.JsInterop
 #endif
@@ -12,7 +12,7 @@ open Fable.Core.JsInterop
 let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
-#if FABLE_COMPILER && !REACT_NATIVE
+#if FABLE_COMPILER
 let private buildSilentAuthorizeUrl (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
     let encode = nav.encodeURIComponent
     let scopes = opts.scopes |> String.concat " "
