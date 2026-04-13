@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="*.fsproj; *.fs" PackagePath="fable\" />
+    <Content Include="../src/types.fs; ../src/crypto.fs; ../src/discovery.fs; ../src/token.fs; ../src/storage.fs; ../src/renewal.fs; ../src/state.fs; ../src/api.fs" PackagePath="fable\" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
