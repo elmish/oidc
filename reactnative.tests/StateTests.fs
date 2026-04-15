@@ -149,6 +149,15 @@ let tests = testList "State" [
             match model with
             | Ready (_, _, Renewing _) -> ()
             | _ -> failwith "should stay Renewing"
+
+        testCase "unexpected message in wrong state is ignored" <| fun _ ->
+            let model, _cmd =
+                updateWith (MemoryStorage() :> Storage)
+                    (TokenReceived { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None })
+                    Initializing
+            match model with
+            | Initializing -> ()
+            | _ -> failwith "should remain Initializing"
     ]
 
     testList "model query helpers" [

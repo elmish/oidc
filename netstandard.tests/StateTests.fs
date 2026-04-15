@@ -84,6 +84,34 @@ let tests = testList "State" [
                 Expect.isNone (Storage.StoredSession.load storage) "session should be cleared"
             | _ -> failwith "should be Ready(Unauthenticated)"
 
+        testCase "AuthCallback in Redirecting state processes callback" <| fun _ ->
+            let storage = MemoryStorage() :> Storage
+            let authState : AuthState =
+                { state = "cb-state"; nonce = "cb-nonce"
+                  codeVerifier = "cb-verifier"; redirectUri = "https://app.example.com/callback" }
+            Storage.AuthState.save storage authState
+            let model, _cmd =
+                updateWith storage
+                    (AuthCallback ("auth-code", "cb-state"))
+                    (Ready (testDiscoveryDoc, { keys = [] }, Redirecting))
+            match model with
+            | Ready (_, _, ExchangingCode) -> ()
+            | _ -> failwith "should transition to ExchangingCode"
+
+        testCase "AuthCallback with mismatched state returns Unauthenticated" <| fun _ ->
+            let storage = MemoryStorage() :> Storage
+            let authState : AuthState =
+                { state = "expected-state"; nonce = "n"
+                  codeVerifier = "v"; redirectUri = "https://app.example.com/callback" }
+            Storage.AuthState.save storage authState
+            let model, _cmd =
+                updateWith storage
+                    (AuthCallback ("code", "wrong-state"))
+                    (Ready (testDiscoveryDoc, { keys = [] }, Redirecting))
+            match model with
+            | Ready (_, _, Unauthenticated) -> ()
+            | _ -> failwith "should be Unauthenticated on state mismatch"
+
         testCase "LoggedOut returns Unauthenticated" <| fun _ ->
             let model, _cmd =
                 updateWith (MemoryStorage() :> Storage)

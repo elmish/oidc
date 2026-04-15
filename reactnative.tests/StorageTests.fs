@@ -80,6 +80,11 @@ let tests = testList "Storage" [
             let storage = MemoryStorage() :> Storage
             Expect.isNone (Storage.StoredSession.load storage) "should return None from empty storage"
 
+        testCase "loadSession ignores malformed JSON" <| fun _ ->
+            let storage = MemoryStorage() :> Storage
+            storage.setItem Storage.StoredSession.Key "not valid json {"
+            Expect.isNone (Storage.StoredSession.load storage) "malformed JSON should return None"
+
         testCase "clearAll removes both auth state and session" <| fun _ ->
             let storage = MemoryStorage() :> Storage
             Storage.AuthState.save storage

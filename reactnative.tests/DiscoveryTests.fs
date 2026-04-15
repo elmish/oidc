@@ -40,11 +40,11 @@ let tests = testList "Discovery" [
             Expect.equal doc.issuer "https://auth.example.com" "issuer"
         }
 
-    testCaseAsync "fetchDiscovery rejects issuer mismatch" <|
+    testCaseAsync "fetchDiscovery accepts different issuer in response (Azure AD multi-tenant)" <|
         async {
             let mismatchedJson =
                 Encode.object [
-                    "issuer", Encode.string "https://evil.example.com"
+                    "issuer", Encode.string "https://login.microsoftonline.com/{tenantid}/v2.0"
                     "authorization_endpoint", Encode.string "https://auth.example.com/authorize"
                     "token_endpoint", Encode.string "https://auth.example.com/token"
                     "userinfo_endpoint", Encode.string "https://auth.example.com/userinfo"
@@ -54,16 +54,25 @@ let tests = testList "Discovery" [
             let http = mockHttp (Map.ofList [
                 "https://auth.example.com/.well-known/openid-configuration", mismatchedJson
             ])
-            let! result =
-                async {
-                    try
-                        let! _ = Discovery.fetch http "https://auth.example.com"
-                        return Ok ()
-                    with ex ->
-                        return Error ex.Message
-                }
-            match result with
-            | Error msg -> Expect.isTrue (msg.Contains("Issuer mismatch")) "should report issuer mismatch"
-            | Ok _ -> failwith "should fail on issuer mismatch"
+            let! doc = Discovery.fetch http "https://auth.example.com"
+            Expect.equal doc.issuer "https://login.microsoftonline.com/{tenantid}/v2.0" "should preserve discovered issuer"
+        }
+
+    testCaseAsync "fetchDiscovery handles missing end_session_endpoint" <|
+        async {
+            let json =
+                Encode.object [
+                    "issuer", Encode.string "https://auth.example.com"
+                    "authorization_endpoint", Encode.string "https://auth.example.com/authorize"
+                    "token_endpoint", Encode.string "https://auth.example.com/token"
+                    "userinfo_endpoint", Encode.string "https://auth.example.com/userinfo"
+                    "jwks_uri", Encode.string "https://auth.example.com/.well-known/jwks.json"
+                ] |> Encode.toString 0
+
+            let http = mockHttp (Map.ofList [
+                "https://auth.example.com/.well-known/openid-configuration", json
+            ])
+            let! doc = Discovery.fetch http "https://auth.example.com"
+            Expect.isNone doc.endSessionEndpoint "should be None when absent"
         }
 ]

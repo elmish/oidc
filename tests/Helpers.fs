@@ -48,6 +48,21 @@ let testPlatform (storage: Storage) : Platform =
           timer = Browser.timer }
     { platform with renewal = Elmish.OIDC.Renewal.browser platform }
 
+let mockHttp (responses: Map<string, string>) =
+    { new HttpClient with
+        member _.getText (url: string) =
+            async {
+                match responses |> Map.tryFind url with
+                | Some text -> return text
+                | None -> return failwith $"mockHttp: no response configured for GET {url}"
+            }
+        member _.postForm (url: string) (_body: string) =
+            async {
+                match responses |> Map.tryFind url with
+                | Some text -> return text
+                | None -> return failwith $"mockHttp: no response configured for POST {url}"
+            } }
+
 let jsonToBase64Url (json: string) : string =
     let bytes : byte[] = Fable.Core.JsInterop.emitJsExpr json "new TextEncoder().encode($0)"
     Elmish.OIDC.Crypto.Base64Url.encode Browser.encoding bytes

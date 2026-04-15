@@ -65,6 +65,17 @@ let tests = testList "Storage" [
             | None ->
                 failwith "loadSession should return Some after save"
 
+        testCase "saveSession then loadSession roundtrips refreshToken" <| fun _ ->
+            let storage = MemoryStorage() :> Storage
+            let response : TokenResponse =
+                { accessToken = "at"; idToken = "it"; tokenType = "Bearer"
+                  expiresIn = 3600; scope = "openid"; refreshToken = Some "rt-xyz" }
+            Storage.StoredSession.save storage response
+            let loaded = Storage.StoredSession.load storage
+            match loaded with
+            | Some r -> Expect.equal r.refreshToken (Some "rt-xyz") "refreshToken"
+            | None -> failwith "should return Some"
+
         testCase "loadSession from empty storage returns None" <| fun _ ->
             let storage = MemoryStorage() :> Storage
             Expect.isNone (Storage.StoredSession.load storage) "should return None from empty storage"

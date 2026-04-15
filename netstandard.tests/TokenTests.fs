@@ -150,10 +150,44 @@ let tests = testList "Token" [
             | Error msg -> Expect.isTrue (msg.Contains("Nonce mismatch")) "should report nonce mismatch"
             | Ok _ -> failwith "wrong nonce MUST be rejected"
 
+        testCase "accepts when aud array contains client among others" <| fun _ ->
+            let payload = { validPayload () with aud = [ "other"; testOptions.clientId; "another" ] }
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") (nowEpoch ()) validHeader payload
+            Expect.isOk result "client present in aud array should pass"
+
+        testCase "rejects future-dated iat beyond clock skew" <| fun _ ->
+            let now = nowEpoch ()
+            let payload = { validPayload () with iat = now + 600L }
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") now validHeader payload
+            match result with
+            | Error msg -> Expect.isTrue (msg.Contains("future")) "should report future-dated"
+            | Ok _ -> failwith "future-dated token MUST be rejected"
+
+        testCase "accepts iat within clock skew" <| fun _ ->
+            let now = nowEpoch ()
+            let payload = { validPayload () with iat = now + 100L }
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") now validHeader payload
+            Expect.isOk result "iat within clock skew should be accepted"
+
+        testCase "rejects missing nonce when expected" <| fun _ ->
+            let payload = { validPayload () with nonce = None }
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "expected-nonce") (nowEpoch ()) validHeader payload
+            match result with
+            | Error msg -> Expect.isTrue (msg.Contains("Nonce")) "should report missing nonce"
+            | Ok _ -> failwith "missing nonce when expected MUST be rejected"
+
         testCase "accepts missing nonce when not required" <| fun _ ->
             let payload = { validPayload () with nonce = None }
             let result = Token.Claims.validate testOptions testOptions.authority None (nowEpoch ()) validHeader payload
             Expect.isOk result "no nonce required -> should accept"
+
+        testCase "checks run in priority order (alg before issuer)" <| fun _ ->
+            let header = { alg = "none"; kid = "test-kid-1" }
+            let payload = { validPayload () with iss = "https://evil.example.com" }
+            let result = Token.Claims.validate testOptions testOptions.authority None (nowEpoch ()) header payload
+            match result with
+            | Error msg -> Expect.isTrue (msg.Contains("not allowed")) "alg check should come first"
+            | Ok _ -> failwith "should fail"
     ]
 
     testList "validateAndVerify with real RSA signature" [

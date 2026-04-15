@@ -22,4 +22,12 @@ let tests = testList "Renewal" [
             | Ok _ ->
                 failwith "should fail when silentRedirectUri is None"
         }
+
+    testList "expirySubscription" [
+        testCase "creates disposable interval" <| fun _ ->
+            let mutable count = 0
+            let dispatch _ = count <- count + 1
+            let sub = Renewal.expirySubscription Browser.timer dispatch
+            sub.Dispose()
+    ]
 ]
