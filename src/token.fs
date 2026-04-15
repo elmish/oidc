@@ -57,8 +57,8 @@ module Jwks =
               kid = get.Required.Field "kid" Decode.string
               n = get.Required.Field "n" Decode.string
               e = get.Required.Field "e" Decode.string
-              alg = get.Required.Field "alg" Decode.string
-              ``use`` = get.Required.Field "use" Decode.string })
+              alg = get.Optional.Field "alg" Decode.string |> Option.defaultValue "RS256"
+              ``use`` = get.Optional.Field "use" Decode.string })
 
     let private decoder : Decoder<Jwks> =
         Decode.object (fun get ->
@@ -130,17 +130,18 @@ module Jwt =
 
 module Signature =
 
-    let verify (platform: Platform) (key: obj) (jwt: string) : Async<bool> =
+    let verify (platform: Platform) (alg: string) (key: obj) (jwt: string) : Async<bool> =
         let parts = jwt.Split('.')
         let signedData = parts.[0] + "." + parts.[1]
         let signatureBytes = Crypto.Base64Url.decode platform.encoding parts.[2]
         let dataBytes = platform.encoding.utf8Encode signedData
-        platform.crypto.rsaVerify key signatureBytes dataBytes
+        platform.crypto.rsaVerify alg key signatureBytes dataBytes
 
 module Claims =
 
     let validate
         (opts: Options)
+        (issuer: string)
         (nonce: string option)
         (nowEpoch: int64)
         (header: JwtHeader)
@@ -148,8 +149,8 @@ module Claims =
         : Result<unit, string> =
         if not (opts.allowedAlgorithms |> List.contains header.alg) then
             Error $"Algorithm '{header.alg}' is not allowed. Allowed: {opts.allowedAlgorithms}"
-        elif payload.iss <> opts.authority.TrimEnd('/') then
-            Error $"Issuer mismatch: expected '{opts.authority.TrimEnd('/')}', got '{payload.iss}'"
+        elif payload.iss <> issuer.TrimEnd('/') then
+            Error $"Issuer mismatch: expected '{issuer.TrimEnd('/')}', got '{payload.iss}'"
         elif not (payload.aud |> List.contains opts.clientId) then
             Error $"Audience does not contain '{opts.clientId}'"
         elif payload.exp + int64 opts.clockSkewSeconds <= nowEpoch then
@@ -167,6 +168,7 @@ module IdToken =
     let private validateAndVerify
         (platform: Platform)
         (opts: Options)
+        (issuer: string)
         (nonce: string option)
         (nowEpoch: int64)
         (jwks: Jwks)
@@ -175,21 +177,21 @@ module IdToken =
         match Jwt.decode platform.encoding jwt with
         | Error err -> async { return Error err }
         | Ok(header, payload) ->
-            match Claims.validate opts nonce nowEpoch header payload with
+            match Claims.validate opts issuer nonce nowEpoch header payload with
             | Error err -> async { return Error err }
             | Ok() ->
-                match jwks.keys |> List.tryFind (fun k -> k.kid = header.kid && k.``use`` = "sig") with
+                match jwks.keys |> List.tryFind (fun k -> k.kid = header.kid && k.``use`` <> Some "enc") with
                 | None -> async { return Error $"No signing key found for kid '{header.kid}'" }
                 | Some jwkKey ->
                     async {
                         let! cryptoKey = platform.crypto.importRsaKey jwkKey
-                        let! valid = Signature.verify platform cryptoKey jwt
+                        let! valid = Signature.verify platform header.alg cryptoKey jwt
                         if valid then return Ok payload
                         else return Error "Signature verification failed"
                     }
 
-    let validate (platform: Platform) (opts: Options) (nonce: string) (nowEpoch: int64) (jwks: Jwks) (jwt: string) : Async<Result<JwtPayload, string>> =
-        validateAndVerify platform opts (Some nonce) nowEpoch jwks jwt
+    let validate (platform: Platform) (opts: Options) (issuer: string) (nonce: string) (nowEpoch: int64) (jwks: Jwks) (jwt: string) : Async<Result<JwtPayload, string>> =
+        validateAndVerify platform opts issuer (Some nonce) nowEpoch jwks jwt
 
-    let revalidateStored (platform: Platform) (opts: Options) (nowEpoch: int64) (jwks: Jwks) (jwt: string) : Async<Result<JwtPayload, string>> =
-        validateAndVerify platform opts None nowEpoch jwks jwt
+    let revalidateStored (platform: Platform) (opts: Options) (issuer: string) (nowEpoch: int64) (jwks: Jwks) (jwt: string) : Async<Result<JwtPayload, string>> =
+        validateAndVerify platform opts issuer None nowEpoch jwks jwt

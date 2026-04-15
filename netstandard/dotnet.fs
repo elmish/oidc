@@ -32,10 +32,20 @@ module DotNet =
                     return rsa :> obj
                 }
 
-            member _.rsaVerify (key: obj) (signature: byte[]) (data: byte[]) =
+            member _.rsaVerify (alg: string) (key: obj) (signature: byte[]) (data: byte[]) =
                 async {
                     let rsa = key :?> RSA
-                    return rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                    let rsaAlg = Crypto.rsaAlgorithm alg
+                    let hashAlg =
+                        match rsaAlg.hash with
+                        | "SHA-256" -> HashAlgorithmName.SHA256
+                        | "SHA-384" -> HashAlgorithmName.SHA384
+                        | "SHA-512" -> HashAlgorithmName.SHA512
+                        | h -> HashAlgorithmName(h)
+                    let padding =
+                        if rsaAlg.name = "RSA-PSS" then RSASignaturePadding.Pss
+                        else RSASignaturePadding.Pkcs1
+                    return rsa.VerifyData(data, signature, hashAlg, padding)
                 } }
 
     let encoding =
@@ -56,24 +66,34 @@ module DotNet =
         let client = new System.Net.Http.HttpClient()
         { new HttpClient with
             member _.getText (url: string) =
-                client.GetStringAsync(url) |> Async.AwaitTask
+                async {
+                    let! response = client.GetAsync(url) |> Async.AwaitTask
+                    response.EnsureSuccessStatusCode() |> ignore
+                    return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                }
 
             member _.postForm (url: string) (body: string) =
                 async {
                     use content = new StringContent(body, Encoding.UTF8, "application/x-www-form-urlencoded")
                     let! response = client.PostAsync(url, content) |> Async.AwaitTask
+                    response.EnsureSuccessStatusCode() |> ignore
                     return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
                 } }
 
     let httpWith (client: System.Net.Http.HttpClient) =
         { new HttpClient with
             member _.getText (url: string) =
-                client.GetStringAsync(url) |> Async.AwaitTask
+                async {
+                    let! response = client.GetAsync(url) |> Async.AwaitTask
+                    response.EnsureSuccessStatusCode() |> ignore
+                    return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                }
 
             member _.postForm (url: string) (body: string) =
                 async {
                     use content = new StringContent(body, Encoding.UTF8, "application/x-www-form-urlencoded")
                     let! response = client.PostAsync(url, content) |> Async.AwaitTask
+                    response.EnsureSuccessStatusCode() |> ignore
                     return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
                 } }
 

@@ -6,9 +6,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="types.fs" />
+    <Compile Include="crypto.fs" />
     <Compile Include="interop.fs" />
     <Compile Include="browser.fs" />
-    <Compile Include="crypto.fs" />
     <Compile Include="discovery.fs" />
     <Compile Include="token.fs" />
     <Compile Include="storage.fs" />

@@ -25,10 +25,13 @@ module ReactNative =
                 }
 
             member _.importRsaKey (key: JwksKey) =
-                ReactNativeInterop.Crypto.importJwk (key :> obj) |> Async.AwaitPromise
+                let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm key.alg
+                ReactNativeInterop.Crypto.importJwk (key :> obj) rsaAlg.name rsaAlg.hash |> Async.AwaitPromise
 
-            member _.rsaVerify (key: obj) (signature: byte[]) (data: byte[]) =
-                ReactNativeInterop.Crypto.verify key (ReactNativeInterop.Buffers.toArrayBuffer signature) (ReactNativeInterop.Buffers.toArrayBuffer data)
+            member _.rsaVerify (alg: string) (key: obj) (signature: byte[]) (data: byte[]) =
+                let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm alg
+                let saltLength = if rsaAlg.name = "RSA-PSS" then (match rsaAlg.hash with "SHA-256" -> 32 | "SHA-384" -> 48 | _ -> 64) else 0
+                ReactNativeInterop.Crypto.verify key (ReactNativeInterop.Buffers.toArrayBuffer signature) (ReactNativeInterop.Buffers.toArrayBuffer data) rsaAlg.name saltLength
                 |> Async.AwaitPromise }
 
     let encoding =
@@ -51,12 +54,16 @@ module ReactNative =
             member _.getText (url: string) =
                 async {
                     let! response = ReactNativeInterop.Http.get url |> Async.AwaitPromise
+                    if not response.ok then
+                        return failwith $"HTTP {response.status} {response.statusText} from GET {url}"
                     return! response.text () |> Async.AwaitPromise
                 }
 
             member _.postForm (url: string) (body: string) =
                 async {
                     let! response = ReactNativeInterop.Http.postForm url body |> Async.AwaitPromise
+                    if not response.ok then
+                        return failwith $"HTTP {response.status} {response.statusText} from POST {url}"
                     return! response.text () |> Async.AwaitPromise
                 } }
 

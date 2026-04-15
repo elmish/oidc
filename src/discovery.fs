@@ -25,10 +25,7 @@ let fetch (http: HttpClient) (authority: string) : Async<DiscoveryDocument> =
     async {
         let! text = http.getText url
         match Decode.fromString decoder text with
-        | Ok doc ->
-            if doc.issuer <> authority then
-                return failwith $"Issuer mismatch: expected '{authority}' but got '{doc.issuer}'"
-            return doc
+        | Ok doc -> return doc
         | Error err ->
             return failwith $"Failed to decode discovery document: {err}"
     }

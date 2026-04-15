@@ -68,27 +68,27 @@ let tests = testList "Token" [
         testCase "accepts valid claims" <| fun _ ->
             let now = nowEpoch ()
             let payload = validPayload ()
-            let result = Token.Claims.validate testOptions (Some "test-nonce") now validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") now validHeader payload
             Expect.isOk result "valid claims should pass"
 
         testCase "rejects algorithm 'none' (algorithm confusion attack)" <| fun _ ->
             let header = { alg = "none"; kid = "test-kid-1" }
             let payload = validPayload ()
-            let result = Token.Claims.validate testOptions (Some "test-nonce") (nowEpoch ()) header payload
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") (nowEpoch ()) header payload
             match result with
             | Error msg -> Expect.isTrue (msg.Contains("not allowed")) "should reject alg=none"
             | Ok _ -> failwith "alg=none MUST be rejected"
 
         testCase "rejects issuer mismatch" <| fun _ ->
             let payload = { validPayload () with iss = "https://evil.example.com" }
-            let result = Token.Claims.validate testOptions (Some "test-nonce") (nowEpoch ()) validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") (nowEpoch ()) validHeader payload
             match result with
             | Error msg -> Expect.isTrue (msg.Contains("Issuer mismatch")) "should report issuer mismatch"
             | Ok _ -> failwith "wrong issuer MUST be rejected"
 
         testCase "rejects audience mismatch" <| fun _ ->
             let payload = { validPayload () with aud = [ "wrong-client-id" ] }
-            let result = Token.Claims.validate testOptions (Some "test-nonce") (nowEpoch ()) validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "test-nonce") (nowEpoch ()) validHeader payload
             match result with
             | Error msg -> Expect.isTrue (msg.Contains("Audience")) "should report audience mismatch"
             | Ok _ -> failwith "wrong audience MUST be rejected"
@@ -96,7 +96,7 @@ let tests = testList "Token" [
         testCase "rejects expired token beyond clock skew" <| fun _ ->
             let now = nowEpoch ()
             let payload = { validPayload () with exp = now - 600L; iat = now - 4200L }
-            let result = Token.Claims.validate testOptions None now validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority None now validHeader payload
             match result with
             | Error msg -> Expect.isTrue (msg.Contains("expired")) "should report expiry"
             | Ok _ -> failwith "expired token MUST be rejected"
@@ -104,12 +104,12 @@ let tests = testList "Token" [
         testCase "accepts token expired within clock skew" <| fun _ ->
             let now = nowEpoch ()
             let payload = { validPayload () with exp = now - 100L; iat = now - 3700L }
-            let result = Token.Claims.validate testOptions None now validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority None now validHeader payload
             Expect.isOk result "token within clock skew should be accepted"
 
         testCase "rejects nonce mismatch" <| fun _ ->
             let payload = { validPayload () with nonce = Some "wrong-nonce" }
-            let result = Token.Claims.validate testOptions (Some "expected-nonce") (nowEpoch ()) validHeader payload
+            let result = Token.Claims.validate testOptions testOptions.authority (Some "expected-nonce") (nowEpoch ()) validHeader payload
             match result with
             | Error msg -> Expect.isTrue (msg.Contains("Nonce mismatch")) "should report nonce mismatch"
             | Ok _ -> failwith "wrong nonce MUST be rejected"
@@ -122,7 +122,7 @@ let tests = testList "Token" [
                 let jwt = buildTestJwt validHeader payload
                 let jwks : Jwks = { keys = [] }
                 let plt = testPlatform (MemoryStorage() :> Storage)
-                let! result = Token.IdToken.validate plt testOptions "test-nonce" (nowEpoch ()) jwks jwt
+                let! result = Token.IdToken.validate plt testOptions testOptions.authority "test-nonce" (nowEpoch ()) jwks jwt
                 match result with
                 | Error msg -> Expect.isTrue (msg.Contains("kid")) "should mention kid"
                 | Ok _ -> failwith "unknown kid should be rejected"
@@ -145,7 +145,7 @@ let tests = testList "Token" [
                 let! jwt = signJwt privateKey headerJson payloadJson |> Async.AwaitPromise
                 let jwks : Jwks = { keys = [ jwksKey ] }
                 let plt = testPlatform (MemoryStorage() :> Storage)
-                let! result = Token.IdToken.validate plt testOptions "test-nonce" now jwks jwt
+                let! result = Token.IdToken.validate plt testOptions testOptions.authority "test-nonce" now jwks jwt
                 match result with
                 | Ok payload ->
                     Expect.equal payload.sub "user-123" "sub should match"
@@ -183,7 +183,7 @@ let tests = testList "Token" [
                 let tamperedJwt = $"{parts.[0]}.{tamperedPayload}.{parts.[2]}"
                 let jwks : Jwks = { keys = [ jwksKey ] }
                 let plt = testPlatform (MemoryStorage() :> Storage)
-                let! result = Token.IdToken.validate plt testOptions "test-nonce" now jwks tamperedJwt
+                let! result = Token.IdToken.validate plt testOptions testOptions.authority "test-nonce" now jwks tamperedJwt
                 match result with
                 | Error msg -> Expect.isTrue (msg.Contains("Signature")) "should report signature failure"
                 | Ok _ -> failwith "tampered JWT should be rejected"

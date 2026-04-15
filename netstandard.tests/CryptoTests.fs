@@ -74,7 +74,7 @@ let tests = testList "Crypto" [
                 let data = System.Text.Encoding.UTF8.GetBytes "test data to sign"
                 let signature = rsa.SignData(data, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1)
                 let! key = cry.importRsaKey jwksKey
-                let! valid = cry.rsaVerify key signature data
+                let! valid = cry.rsaVerify "RS256" key signature data
                 Expect.isTrue valid "signature should verify"
             }
 
@@ -85,7 +85,7 @@ let tests = testList "Crypto" [
                 let signature = rsa.SignData(data, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1)
                 let! key = cry.importRsaKey jwksKey
                 let tamperedData = System.Text.Encoding.UTF8.GetBytes "tampered data"
-                let! valid = cry.rsaVerify key signature tamperedData
+                let! valid = cry.rsaVerify "RS256" key signature tamperedData
                 Expect.isFalse valid "tampered data should not verify"
             }
     ]

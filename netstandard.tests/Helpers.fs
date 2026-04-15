@@ -123,7 +123,7 @@ let generateTestKeyPair () : RSA * JwksKey =
           n = toB64Url p.Modulus
           e = toB64Url p.Exponent
           alg = "RS256"
-          ``use`` = "sig" }
+          ``use`` = Some "sig" }
     rsa, jwksKey
 
 let signJwt (rsa: RSA) (headerJson: string) (payloadJson: string) : string =

@@ -93,7 +93,7 @@ let browser (platform: Platform) =
                                                 Token.Code.exchange platform doc opts.clientId code verifier silentUri
                                                 |> Async.StartAsPromise
                                                 |> Promise.bind (fun response ->
-                                                    Token.IdToken.validate platform opts nonce (nowEpoch ()) jwks response.idToken
+                                                    Token.IdToken.validate platform opts doc.issuer nonce (nowEpoch ()) jwks response.idToken
                                                     |> Async.StartAsPromise
                                                     |> Promise.map (fun result ->
                                                         match result with

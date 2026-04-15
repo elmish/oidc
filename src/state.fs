@@ -110,7 +110,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
                 | Some response ->
                     Ready (doc, jwks, ValidatingToken),
                     Cmd.OfAsync.either
-                        (fun () -> Token.IdToken.revalidateStored platform opts (nowEpoch ()) jwks response.idToken)
+                        (fun () -> Token.IdToken.revalidateStored platform opts doc.issuer (nowEpoch ()) jwks response.idToken)
                         ()
                         (fun result ->
                             match result with
@@ -128,7 +128,7 @@ let update (platform: Platform) (opts: Options) (getUserInfo: string -> string -
             pendingNonce <- None
             Ready (doc, jwks, ValidatingToken),
             Cmd.OfAsync.either
-                (fun () -> Token.IdToken.validate platform opts nonce (nowEpoch ()) jwks response.idToken)
+                (fun () -> Token.IdToken.validate platform opts doc.issuer nonce (nowEpoch ()) jwks response.idToken)
                 ()
                 (fun result ->
                     match result with

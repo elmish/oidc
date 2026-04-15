@@ -12,11 +12,11 @@ module Crypto =
     [<Emit("globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode($0))")>]
     let sha256Digest (_input: string) : JS.Promise<JS.ArrayBuffer> = jsNative
 
-    [<Emit("globalThis.crypto.subtle.importKey('jwk', {kty: $0.kty, n: $0.n, e: $0.e, alg: $0.alg, ext: true}, {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'}, false, ['verify'])")>]
-    let importJwk (_key: obj) : JS.Promise<obj> = jsNative
+    [<Emit("globalThis.crypto.subtle.importKey('jwk', {kty: $0.kty, n: $0.n, e: $0.e, alg: $0.alg, ext: true}, {name: $1, hash: $2}, false, ['verify'])")>]
+    let importJwk (_key: obj) (_algName: string) (_hashName: string) : JS.Promise<obj> = jsNative
 
-    [<Emit("globalThis.crypto.subtle.verify('RSASSA-PKCS1-v1_5', $0, $1, $2)")>]
-    let verify (_key: obj) (_signature: JS.ArrayBuffer) (_data: JS.ArrayBuffer) : JS.Promise<bool> = jsNative
+    [<Emit("globalThis.crypto.subtle.verify($3 === 'RSA-PSS' ? {name: 'RSA-PSS', saltLength: $4} : $3, $0, $1, $2)")>]
+    let verify (_key: obj) (_signature: JS.ArrayBuffer) (_data: JS.ArrayBuffer) (_algName: string) (_saltLength: int) : JS.Promise<bool> = jsNative
 
     let isAvailable () =
         not (isNullOrUndefined Browser.Dom.window?crypto)
@@ -47,6 +47,9 @@ module Buffers =
 module Http =
 
     type Response =
+        abstract ok: bool
+        abstract status: int
+        abstract statusText: string
         abstract text: unit -> JS.Promise<string>
 
     [<Emit("fetch($0)")>]

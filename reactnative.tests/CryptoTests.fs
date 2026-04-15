@@ -79,7 +79,7 @@ let tests = testList "Crypto" [
                     |> Async.AwaitPromise
                 let sigBytes : byte[] = Fable.Core.JsInterop.emitJsExpr signature "new Uint8Array($0)"
                 let! key = cry.importRsaKey jwksKey
-                let! valid = cry.rsaVerify key sigBytes data
+                let! valid = cry.rsaVerify "RS256" key sigBytes data
                 Expect.isTrue valid "signature should verify"
             }
 
@@ -95,7 +95,7 @@ let tests = testList "Crypto" [
                 let sigBytes : byte[] = Fable.Core.JsInterop.emitJsExpr signature "new Uint8Array($0)"
                 let! key = cry.importRsaKey jwksKey
                 let tamperedData : byte[] = Fable.Core.JsInterop.emitJsExpr "tampered data" "new TextEncoder().encode($0)"
-                let! valid = cry.rsaVerify key sigBytes tamperedData
+                let! valid = cry.rsaVerify "RS256" key sigBytes tamperedData
                 Expect.isFalse valid "tampered data should not verify"
             }
     ]

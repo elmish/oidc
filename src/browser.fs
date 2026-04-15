@@ -23,10 +23,13 @@ let crypto =
             }
 
         member _.importRsaKey (key: JwksKey) =
-            Interop.Crypto.importJwk (key :> obj) |> Async.AwaitPromise
+            let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm key.alg
+            Interop.Crypto.importJwk (key :> obj) rsaAlg.name rsaAlg.hash |> Async.AwaitPromise
 
-        member _.rsaVerify (key: obj) (signature: byte[]) (data: byte[]) =
-            Interop.Crypto.verify key (Interop.Buffers.toArrayBuffer signature) (Interop.Buffers.toArrayBuffer data)
+        member _.rsaVerify (alg: string) (key: obj) (signature: byte[]) (data: byte[]) =
+            let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm alg
+            let saltLength = if rsaAlg.name = "RSA-PSS" then (match rsaAlg.hash with "SHA-256" -> 32 | "SHA-384" -> 48 | _ -> 64) else 0
+            Interop.Crypto.verify key (Interop.Buffers.toArrayBuffer signature) (Interop.Buffers.toArrayBuffer data) rsaAlg.name saltLength
             |> Async.AwaitPromise }
 
 let encoding =
@@ -49,12 +52,16 @@ let http =
         member _.getText (url: string) =
             async {
                 let! response = Interop.Http.get url |> Async.AwaitPromise
+                if not response.ok then
+                    return failwith $"HTTP {response.status} {response.statusText} from GET {url}"
                 return! response.text () |> Async.AwaitPromise
             }
 
         member _.postForm (url: string) (body: string) =
             async {
                 let! response = Interop.Http.postForm url body |> Async.AwaitPromise
+                if not response.ok then
+                    return failwith $"HTTP {response.status} {response.statusText} from POST {url}"
                 return! response.text () |> Async.AwaitPromise
             } }
 

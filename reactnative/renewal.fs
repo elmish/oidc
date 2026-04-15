@@ -25,7 +25,7 @@ let refreshToken (platform: Platform) =
                     | Some rt ->
                         try
                             let! response = Token.RefreshToken.exchange platform doc opts.clientId rt
-                            let! result = Token.IdToken.revalidateStored platform opts (nowEpoch ()) jwks response.idToken
+                            let! result = Token.IdToken.revalidateStored platform opts doc.issuer (nowEpoch ()) jwks response.idToken
                             match result with
                             | Ok payload -> return Ok (payload, response)
                             | Error err -> return Error (InvalidToken err)

@@ -27,7 +27,7 @@ type JwksKey =
       n: string
       e: string
       alg: string
-      ``use``: string }
+      ``use``: string option }
 
 type Jwks =
     { keys: JwksKey list }
@@ -79,7 +79,7 @@ type CryptoProvider =
     abstract randomBytes: int -> byte[]
     abstract sha256: byte[] -> Async<byte[]>
     abstract importRsaKey: JwksKey -> Async<obj>
-    abstract rsaVerify: key:obj -> signature:byte[] -> data:byte[] -> Async<bool>
+    abstract rsaVerify: alg:string -> key:obj -> signature:byte[] -> data:byte[] -> Async<bool>
 
 type EncodingProvider =
     abstract utf8Encode: string -> byte[]
