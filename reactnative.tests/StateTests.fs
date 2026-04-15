@@ -35,8 +35,8 @@ let tests = testList "State" [
             let authState : AuthState =
                 { state = "expected-state"; nonce = "test-nonce"
                   codeVerifier = "test-verifier"; redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
-            let loaded = Storage.loadAuthState storage
+            Storage.AuthState.save storage authState
+            let loaded = Storage.AuthState.load storage
             match loaded with
             | Some s -> Expect.isFalse (s.state = "wrong-state") "mismatched states must not match"
             | None -> failwith "auth state should be loaded"
@@ -46,18 +46,18 @@ let tests = testList "State" [
             let authState : AuthState =
                 { state = "correct-state"; nonce = "test-nonce"
                   codeVerifier = "test-verifier"; redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
-            let loaded = Storage.loadAuthState storage
+            Storage.AuthState.save storage authState
+            let loaded = Storage.AuthState.load storage
             match loaded with
             | Some s -> Expect.isTrue (s.state = "correct-state") "matching states should be equal"
             | None -> failwith "auth state should be loaded"
 
         testCase "auth state is consumed on load (prevents replay)" <| fun _ ->
             let storage = MemoryStorage() :> Storage
-            Storage.saveAuthState storage
+            Storage.AuthState.save storage
                 { state = "one-time"; nonce = "n"; codeVerifier = "v"; redirectUri = "https://x" }
-            let _first = Storage.loadAuthState storage
-            Expect.isNone (Storage.loadAuthState storage) "second load must return None"
+            let _first = Storage.AuthState.load storage
+            Expect.isNone (Storage.AuthState.load storage) "second load must return None"
     ]
 
     testList "update transitions" [
@@ -72,7 +72,7 @@ let tests = testList "State" [
 
         testCase "ValidationFailed in Ready clears storage and returns Unauthenticated" <| fun _ ->
             let storage = MemoryStorage() :> Storage
-            Storage.saveSession storage
+            Storage.StoredSession.save storage
                 { accessToken = "a"; idToken = "i"; tokenType = "Bearer"; expiresIn = 3600; scope = "openid"; refreshToken = None }
             let model, _cmd =
                 updateWith storage
@@ -80,7 +80,7 @@ let tests = testList "State" [
                     (Ready (testDiscoveryDoc, { keys = [] }, ValidatingToken))
             match model with
             | Ready (_, _, Unauthenticated) ->
-                Expect.isNone (Storage.loadSession storage) "session should be cleared"
+                Expect.isNone (Storage.StoredSession.load storage) "session should be cleared"
             | _ -> failwith "should be Ready(Unauthenticated)"
 
         testCase "AuthCallback in Redirecting state processes callback" <| fun _ ->
@@ -88,7 +88,7 @@ let tests = testList "State" [
             let authState : AuthState =
                 { state = "cb-state"; nonce = "cb-nonce"
                   codeVerifier = "cb-verifier"; redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
+            Storage.AuthState.save storage authState
             let model, _cmd =
                 updateWith storage
                     (AuthCallback ("auth-code", "cb-state"))
@@ -102,7 +102,7 @@ let tests = testList "State" [
             let authState : AuthState =
                 { state = "expected-state"; nonce = "n"
                   codeVerifier = "v"; redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
+            Storage.AuthState.save storage authState
             let model, _cmd =
                 updateWith storage
                     (AuthCallback ("code", "wrong-state"))

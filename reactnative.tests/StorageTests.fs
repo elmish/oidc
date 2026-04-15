@@ -15,8 +15,8 @@ let tests = testList "Storage" [
                   nonce = "test-nonce"
                   codeVerifier = "test-verifier"
                   redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
-            let loaded = Storage.loadAuthState storage
+            Storage.AuthState.save storage authState
+            let loaded = Storage.AuthState.load storage
             match loaded with
             | Some s ->
                 Expect.equal s.state authState.state "state"
@@ -33,14 +33,14 @@ let tests = testList "Storage" [
                   nonce = "test-nonce"
                   codeVerifier = "test-verifier"
                   redirectUri = "https://app.example.com/callback" }
-            Storage.saveAuthState storage authState
-            let _first = Storage.loadAuthState storage
-            let second = Storage.loadAuthState storage
+            Storage.AuthState.save storage authState
+            let _first = Storage.AuthState.load storage
+            let second = Storage.AuthState.load storage
             Expect.isNone second "second load should return None (consumed)"
 
         testCase "loadAuthState from empty storage returns None" <| fun _ ->
             let storage = MemoryStorage() :> Storage
-            Expect.isNone (Storage.loadAuthState storage) "should return None from empty storage"
+            Expect.isNone (Storage.AuthState.load storage) "should return None from empty storage"
     ]
 
     testList "Session serialization" [
@@ -53,8 +53,8 @@ let tests = testList "Storage" [
                   expiresIn = 3600
                   scope = "openid profile"
                   refreshToken = None }
-            Storage.saveSession storage response
-            let loaded = Storage.loadSession storage
+            Storage.StoredSession.save storage response
+            let loaded = Storage.StoredSession.load storage
             match loaded with
             | Some r ->
                 Expect.equal r.accessToken response.accessToken "accessToken"
@@ -70,26 +70,26 @@ let tests = testList "Storage" [
             let response : TokenResponse =
                 { accessToken = "at"; idToken = "it"; tokenType = "Bearer"
                   expiresIn = 3600; scope = "openid"; refreshToken = Some "rt-xyz" }
-            Storage.saveSession storage response
-            let loaded = Storage.loadSession storage
+            Storage.StoredSession.save storage response
+            let loaded = Storage.StoredSession.load storage
             match loaded with
             | Some r -> Expect.equal r.refreshToken (Some "rt-xyz") "refreshToken"
             | None -> failwith "should return Some"
 
         testCase "loadSession from empty storage returns None" <| fun _ ->
             let storage = MemoryStorage() :> Storage
-            Expect.isNone (Storage.loadSession storage) "should return None from empty storage"
+            Expect.isNone (Storage.StoredSession.load storage) "should return None from empty storage"
 
         testCase "clearAll removes both auth state and session" <| fun _ ->
             let storage = MemoryStorage() :> Storage
-            Storage.saveAuthState storage
+            Storage.AuthState.save storage
                 { state = "s"; nonce = "n"; codeVerifier = "v"; redirectUri = "r" }
-            Storage.saveSession storage
+            Storage.StoredSession.save storage
                 { accessToken = "a"; idToken = "i"; tokenType = "Bearer"
                   expiresIn = 3600; scope = "openid"; refreshToken = None }
             Storage.clearAll storage
-            Expect.isNone (Storage.loadAuthState storage) "auth state should be cleared"
-            Expect.isNone (Storage.loadSession storage) "session should be cleared"
+            Expect.isNone (Storage.AuthState.load storage) "auth state should be cleared"
+            Expect.isNone (Storage.StoredSession.load storage) "session should be cleared"
     ]
 
     testList "ReactNative.MemoryStorage" [

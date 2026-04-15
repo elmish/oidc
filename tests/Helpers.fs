@@ -50,7 +50,7 @@ let testPlatform (storage: Storage) : Platform =
 
 let jsonToBase64Url (json: string) : string =
     let bytes : byte[] = Fable.Core.JsInterop.emitJsExpr json "new TextEncoder().encode($0)"
-    Elmish.OIDC.Crypto.base64UrlEncode Browser.encoding bytes
+    Elmish.OIDC.Crypto.Base64Url.encode Browser.encoding bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

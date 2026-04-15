@@ -155,3 +155,26 @@ type Msg<'info> =
     | NoSession
     | Tick
 
+module Session =
+
+    let build (response: TokenResponse) (payload: JwtPayload) : Session<'info> =
+        { accessToken = response.accessToken
+          idToken = response.idToken
+          tokenType = response.tokenType
+          expiresAt = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + int64 response.expiresIn)
+          scope = response.scope
+          claims = payload
+          userInfo = None }
+
+    let tryGet (model: Model<'info>) : Session<'info> option =
+        match model with
+        | Ready (_, _, Authenticated session)
+        | Ready (_, _, Renewing session) -> Some session
+        | _ -> None
+
+    let isAuthenticated (model: Model<'info>) : bool =
+        tryGet model |> Option.isSome
+
+    let tryGetAccessToken (model: Model<'info>) : string option =
+        tryGet model |> Option.map (fun s -> s.accessToken)
+

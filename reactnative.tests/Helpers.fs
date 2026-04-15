@@ -86,7 +86,7 @@ let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : P
 
 let jsonToBase64Url (json: string) : string =
     let bytes : byte[] = emitJsExpr json "new TextEncoder().encode($0)"
-    Crypto.base64UrlEncode ReactNative.encoding bytes
+    Crypto.Base64Url.encode ReactNative.encoding bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

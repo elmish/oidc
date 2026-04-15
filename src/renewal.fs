@@ -13,23 +13,25 @@ let private nowEpoch () : int64 =
     DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 
 #if FABLE_COMPILER
-let private buildSilentAuthorizeUrl (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
-    let encode = nav.encodeURIComponent
-    let scopes = opts.scopes |> String.concat " "
-    let redirectUri =
-        match opts.silentRedirectUri with
-        | Some uri -> uri
-        | None -> opts.redirectUri
-    doc.authorizationEndpoint
-    + "?response_type=" + encode "code"
-    + "&client_id=" + encode opts.clientId
-    + "&scope=" + encode scopes
-    + "&redirect_uri=" + encode redirectUri
-    + "&state=" + encode state
-    + "&nonce=" + encode nonce
-    + "&code_challenge=" + encode codeChallenge
-    + "&code_challenge_method=" + encode "S256"
-    + "&prompt=" + encode "none"
+module SilentAuthorizeUrl =
+
+    let build (nav: Navigation) (doc: DiscoveryDocument) (opts: Options) (state: string) (nonce: string) (codeChallenge: string) : string =
+        let encode = nav.encodeURIComponent
+        let scopes = opts.scopes |> String.concat " "
+        let redirectUri =
+            match opts.silentRedirectUri with
+            | Some uri -> uri
+            | None -> opts.redirectUri
+        doc.authorizationEndpoint
+        + "?response_type=" + encode "code"
+        + "&client_id=" + encode opts.clientId
+        + "&scope=" + encode scopes
+        + "&redirect_uri=" + encode redirectUri
+        + "&state=" + encode state
+        + "&nonce=" + encode nonce
+        + "&code_challenge=" + encode codeChallenge
+        + "&code_challenge_method=" + encode "S256"
+        + "&prompt=" + encode "none"
 
 let browser (platform: Platform) =
     { new RenewalStrategy with
@@ -39,19 +41,19 @@ let browser (platform: Platform) =
                 async { return Error (InvalidToken "silentRedirectUri is not configured") }
             | Some silentUri ->
                 async {
-                    let state = Crypto.generateState platform.crypto platform.encoding
-                    let nonce = Crypto.generateNonce platform.crypto platform.encoding
-                    let verifier = Crypto.generateCodeVerifier platform.crypto platform.encoding
-                    let! challenge = Crypto.computeCodeChallenge platform.crypto platform.encoding verifier
+                    let state = Crypto.OAuthState.generate platform.crypto platform.encoding
+                    let nonce = Crypto.Nonce.generate platform.crypto platform.encoding
+                    let verifier = Crypto.CodeVerifier.generate platform.crypto platform.encoding
+                    let! challenge = Crypto.CodeChallenge.compute platform.crypto platform.encoding verifier
 
                     let authState =
                         { state = state
                           nonce = nonce
                           codeVerifier = verifier
                           redirectUri = silentUri }
-                    Storage.saveAuthState storage authState
+                    Storage.AuthState.save storage authState
 
-                    let url = buildSilentAuthorizeUrl platform.navigation doc opts state nonce challenge
+                    let url = SilentAuthorizeUrl.build platform.navigation doc opts state nonce challenge
                     let window = Browser.Dom.window
                     let document = Browser.Dom.document
 
@@ -88,10 +90,10 @@ let browser (platform: Platform) =
                                         | None ->
                                             match Interop.UrlSearchParams.tryGet "code" ps, Interop.UrlSearchParams.tryGet "state" ps with
                                             | Some code, Some returnedState when returnedState = state ->
-                                                Token.exchangeCode platform doc opts.clientId code verifier silentUri
+                                                Token.Code.exchange platform doc opts.clientId code verifier silentUri
                                                 |> Async.StartAsPromise
                                                 |> Promise.bind (fun response ->
-                                                    Token.validateIdToken platform opts nonce (nowEpoch ()) response.idToken jwks
+                                                    Token.IdToken.validate platform opts nonce (nowEpoch ()) jwks response.idToken
                                                     |> Async.StartAsPromise
                                                     |> Promise.map (fun result ->
                                                         match result with

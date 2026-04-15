@@ -1,7 +1,7 @@
 Elmish-OIDC
 =======
 [![Build](https://github.com/elmish/OIDC/actions/workflows/ci.yml/badge.svg)](https://github.com/elmish/OIDC/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/Fable.Elmish.OIDC.svg)](https://www.nuget.org/packages/Fable.Elmish.OIDC)
+
 
 [Authorization Code Flow with PKCE](https://oauth.net/2/pkce/) component for [Elmish](https://github.com/elmish/elmish) applications — **browser, .NET, and React Native**.
 
@@ -56,27 +56,28 @@ let oidcOptions : Options =
 
 ### Browser (Fable)
 
-Uses the convenience API — platform is created automatically with Web Crypto and iframe renewal.
-
 ```fsharp
 open Elmish
 open Elmish.OIDC
+open Elmish.OIDC.Types
+
+let oidc = Api.create oidcOptions
 
 type Model = { oidc: Model<UserInfo> }
 type Msg = OidcMsg of Msg<UserInfo>
 
 let init () =
-    let m, c = Oidc.init oidcOptions
+    let m, c = oidc.init
     { oidc = m }, Cmd.map OidcMsg c
 
 let update msg model =
     match msg with
     | OidcMsg m ->
-        let m', c = Oidc.update oidcOptions getUserInfo m model.oidc
+        let m', c = oidc.update getUserInfo m model.oidc
         { model with oidc = m' }, Cmd.map OidcMsg c
 
 let subscribe model =
-    Oidc.subscribe model.oidc |> Sub.map "oidc" OidcMsg
+    oidc.subscribe model.oidc |> Sub.map "oidc" OidcMsg
 ```
 
 Host a silent renewal page at `silentRedirectUri`:
@@ -90,35 +91,29 @@ Host a silent renewal page at `silentRedirectUri`:
 
 ### .NET (WPF/MAUI)
 
-Uses the platform-aware API with loopback redirect ([RFC 8252](https://tools.ietf.org/html/rfc8252)) and refresh token renewal.
+Uses loopback redirect ([RFC 8252](https://tools.ietf.org/html/rfc8252)) and refresh token renewal.
 
 ```fsharp
 open Elmish
 open Elmish.OIDC
 open Elmish.OIDC.Types
 
-let nav = DotNetNavigation.loopback 8912
+let nav = DotNet.Navigation.loopback 8912
 let storage = DotNet.memoryStorage ()
-
-let platform =
-    let p = { crypto = DotNet.crypto; encoding = DotNet.encoding
-              http = DotNet.http; navigation = nav
-              renewal = Unchecked.defaultof<RenewalStrategy>
-              storage = storage; timer = DotNet.timer }
-    { p with renewal = DotNetRenewal.refreshToken p }
+let oidc = Api.create nav storage oidcOptions
 
 let init () =
-    let m, c = Oidc.initPlatform platform oidcOptions
+    let m, c = oidc.init
     { oidc = m }, Cmd.map OidcMsg c
 
 let update msg model =
     match msg with
     | OidcMsg m ->
-        let m', c = Oidc.updatePlatform platform oidcOptions getUserInfo m model.oidc
+        let m', c = oidc.update getUserInfo m model.oidc
         { model with oidc = m' }, Cmd.map OidcMsg c
 
 let subscribe model =
-    Oidc.subscribePlatform platform model.oidc |> Sub.map "oidc" OidcMsg
+    oidc.subscribe model.oidc |> Sub.map "oidc" OidcMsg
 ```
 
 ### React Native (Expo)
@@ -130,55 +125,42 @@ open Elmish
 open Elmish.OIDC
 open Elmish.OIDC.Types
 
-let nav = ReactNativeNavigation.authSession oidcOptions.redirectUri
+let nav = ReactNative.Navigation.authSession oidcOptions.redirectUri
 let storage = ReactNative.memoryStorage ()
-
-let platform =
-    let p = { crypto = ReactNative.crypto; encoding = ReactNative.encoding
-              http = ReactNative.http; navigation = nav
-              renewal = Unchecked.defaultof<RenewalStrategy>
-              storage = storage; timer = ReactNative.timer }
-    { p with renewal = ReactNativeRenewal.refreshToken p }
+let oidc = Api.create nav storage oidcOptions
 
 let init () =
-    let m, c = Oidc.initPlatform platform oidcOptions
+    let m, c = oidc.init
     { oidc = m }, Cmd.map OidcMsg c
 
 let update msg model =
     match msg with
     | OidcMsg m ->
-        let m', c = Oidc.updatePlatform platform oidcOptions getUserInfo m model.oidc
+        let m', c = oidc.update getUserInfo m model.oidc
         { model with oidc = m' }, Cmd.map OidcMsg c
 
 let subscribe model =
-    Oidc.subscribePlatform platform model.oidc |> Sub.map "oidc" OidcMsg
+    oidc.subscribe model.oidc |> Sub.map "oidc" OidcMsg
 ```
 
 ### API
 
-#### Platform-aware (all platforms)
+#### Core (all platforms)
 
 | Function | Description |
 |---|---|
-| `Oidc.initPlatform platform opts` | Initialize with explicit platform |
-| `Oidc.updatePlatform platform opts getUserInfo msg model` | Update with explicit platform |
-| `Oidc.subscribePlatform platform model` | Renewal timer subscription |
+| `Api.create ...` | Create API with platform-specific defaults |
+| `api.init` | Initialize OIDC model and commands |
+| `api.update getUserInfo msg model` | Handle OIDC messages |
+| `api.subscribe model` | Renewal timer subscription |
 
-#### Browser convenience (backward compat)
-
-| Function | Description |
-|---|---|
-| `Oidc.init opts` | Initialize with browser defaults |
-| `Oidc.update opts getUserInfo msg model` | Update with browser defaults |
-| `Oidc.subscribe model` | Renewal timer subscription |
-
-#### Model queries (all platforms)
+#### Session queries (all platforms)
 
 | Function | Description |
 |---|---|
-| `Oidc.tryGetSession model` | Get session if authenticated |
-| `Oidc.isAuthenticated model` | Check auth status |
-| `Oidc.tryGetAccessToken model` | Get access token |
+| `Session.tryGet model` | Get session if authenticated |
+| `Session.isAuthenticated model` | Check auth status |
+| `Session.tryGetAccessToken model` | Get access token |
 
 ### Messages
 

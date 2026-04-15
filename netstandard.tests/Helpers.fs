@@ -85,7 +85,7 @@ let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : P
 
 let jsonToBase64Url (json: string) : string =
     let bytes = Text.Encoding.UTF8.GetBytes json
-    Crypto.base64UrlEncode DotNet.encoding bytes
+    Crypto.Base64Url.encode DotNet.encoding bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

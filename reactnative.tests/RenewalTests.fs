@@ -9,12 +9,12 @@ open Thoth.Json
 
 let tests = testList "Renewal" [
 
-    testList "ReactNativeRenewal.refreshToken" [
+    testList "Renewal.refreshToken" [
         testCaseAsync "returns error when no stored session" <|
             async {
                 let storage = MemoryStorage() :> Storage
                 let plt = testPlatform storage
-                let renewal = ReactNativeRenewal.refreshToken plt
+                let renewal = Renewal.refreshToken plt
                 let jwks : Jwks = { keys = [] }
                 let! result = renewal.renew testDiscoveryDoc testOptions jwks storage
                 match result with
@@ -28,9 +28,9 @@ let tests = testList "Renewal" [
                 let response : TokenResponse =
                     { accessToken = "at"; idToken = "it"; tokenType = "Bearer"
                       expiresIn = 3600; scope = "openid"; refreshToken = None }
-                Storage.saveSession storage response
+                Storage.StoredSession.save storage response
                 let plt = testPlatform storage
-                let renewal = ReactNativeRenewal.refreshToken plt
+                let renewal = Renewal.refreshToken plt
                 let jwks : Jwks = { keys = [] }
                 let! result = renewal.renew testDiscoveryDoc testOptions jwks storage
                 match result with
@@ -67,12 +67,12 @@ let tests = testList "Renewal" [
                 let storedResponse : TokenResponse =
                     { accessToken = "old-at"; idToken = "old-it"; tokenType = "Bearer"
                       expiresIn = 3600; scope = "openid"; refreshToken = Some "old-rt" }
-                Storage.saveSession storage storedResponse
+                Storage.StoredSession.save storage storedResponse
 
                 let http = mockHttp (Map.ofList [ testDiscoveryDoc.tokenEndpoint, tokenResponseJson ])
                 let nav, _ = mockNavigation ()
                 let plt = testPlatformWith storage http nav
-                let renewal = ReactNativeRenewal.refreshToken plt
+                let renewal = Renewal.refreshToken plt
                 let jwks : Jwks = { keys = [ jwksKey ] }
                 let! result = renewal.renew testDiscoveryDoc testOptions jwks storage
                 match result with

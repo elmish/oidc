@@ -13,8 +13,6 @@
     <Compile Include="storage.fs" />
     <Compile Include="renewal.fs" />
     <Compile Include="reactnative.fs" />
-    <Compile Include="reactnative.navigation.fs" />
-    <Compile Include="reactnative.renewal.fs" />
     <Compile Include="state.fs" />
     <Compile Include="api.fs" />
   </ItemGroup>
