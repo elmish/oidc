@@ -1,3 +1,21 @@
+### 1.0.0-beta.3
+
+* React Native runtime hardening — validated against Expo Go (Hermes, RN 0.76)
+  * RSA verification switched to `react-native-quick-crypto` Node-style API
+    (`createPublicKey` + `createVerify`); RNQC v0.7 SubtleCrypto has RSA
+    commented out and only ECDSA works there
+  * `ReactNative.ensureCrypto ()` helper — actionable error when the
+    Web Crypto polyfill isn't installed
+* Pure F# `Crypto.Base64Url` and `Crypto.Utf8` — no longer depend on
+  `btoa`/`atob` or `TextEncoder`/`TextDecoder`; `TextDecoder` only landed
+  in Hermes in RN 0.85 (not yet shipped), so this was a latent crash on
+  current React Native / Expo SDK when decoding JWT header/payload JSON
+* **Breaking:** `EncodingProvider` removed from `Platform`; `Jwt.decode`
+  and `CodeChallenge.compute` no longer take an encoding provider
+* ESLint flat config + suppressions baseline guarding the Fable-compiled
+  RN output against mobile-unsafe APIs (`subtle.digest`, `TextDecoder`,
+  `String.fromCharCode.apply`, `require`, `eval`)
+
 ### 1.0.0-beta.2
 
 * Multi-platform support — platform abstraction layer for Browser, .NET, and React Native

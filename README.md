@@ -120,6 +120,19 @@ let subscribe model =
 
 Uses `expo-web-browser` for in-app authentication and refresh token renewal.
 
+**Runtime requirements.** The default React Native runtime does not ship the
+Web Crypto API (`globalThis.crypto.subtle`). Install and register
+[`react-native-quick-crypto`](https://github.com/margelo/react-native-quick-crypto)
+at your app entry point, before importing this library:
+
+```js
+import { install } from 'react-native-quick-crypto'
+install()
+```
+
+Then call `ReactNative.ensureCrypto ()` once at startup for an early, actionable
+error if the polyfill is missing.
+
 ```fsharp
 open Elmish
 open Elmish.OIDC
