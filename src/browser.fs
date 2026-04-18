@@ -32,21 +32,6 @@ let crypto =
             Interop.Crypto.verify key (Interop.Buffers.toArrayBuffer signature) (Interop.Buffers.toArrayBuffer data) rsaAlg.name saltLength
             |> Async.AwaitPromise }
 
-let encoding =
-    { new EncodingProvider with
-        member _.utf8Encode (s: string) =
-            let ab : JS.ArrayBuffer = Interop.Encoding.toArrayBuffer s
-            Interop.Buffers.toBytes ab
-
-        member _.utf8Decode (bytes: byte[]) =
-            Interop.Encoding.fromBytes bytes
-
-        member _.base64Encode (bytes: byte[]) =
-            Interop.Encoding.btoaFromBytes bytes
-
-        member _.base64Decode (s: string) =
-            Interop.Encoding.atobToBytes s }
-
 let http =
     { new HttpClient with
         member _.getText (url: string) =
@@ -68,7 +53,10 @@ let http =
 let navigation =
     { new Navigation with
         member _.redirect (url: string) =
-            Browser.Dom.window.location.href <- url
+            async {
+                Browser.Dom.window.location.href <- url
+                return None
+            }
 
         member _.getCallbackParams () =
             let search = Browser.Dom.window.location.search

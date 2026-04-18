@@ -7,7 +7,6 @@ module Api =
     let createWith (storage: Storage) (opts: Options) =
         let p =
             { crypto = Browser.crypto
-              encoding = Browser.encoding
               http = Browser.http
               navigation = Browser.navigation
               renewal = Unchecked.defaultof<RenewalStrategy>

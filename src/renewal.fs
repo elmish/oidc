@@ -41,10 +41,10 @@ let browser (platform: Platform) =
                 async { return Error (InvalidToken "silentRedirectUri is not configured") }
             | Some silentUri ->
                 async {
-                    let state = Crypto.OAuthState.generate platform.crypto platform.encoding
-                    let nonce = Crypto.Nonce.generate platform.crypto platform.encoding
-                    let verifier = Crypto.CodeVerifier.generate platform.crypto platform.encoding
-                    let! challenge = Crypto.CodeChallenge.compute platform.crypto platform.encoding verifier
+                    let state = Crypto.OAuthState.generate platform.crypto
+                    let nonce = Crypto.Nonce.generate platform.crypto
+                    let verifier = Crypto.CodeVerifier.generate platform.crypto
+                    let! challenge = Crypto.CodeChallenge.compute platform.crypto verifier
 
                     let authState =
                         { state = state

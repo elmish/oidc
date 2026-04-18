@@ -114,14 +114,14 @@ module Jwt =
               iat = get.Required.Field "iat" Decode.int64
               nonce = get.Optional.Field "nonce" Decode.string })
 
-    let decode (encoding: EncodingProvider) (jwt: string) : Result<JwtHeader * JwtPayload, string> =
+    let decode (jwt: string) : Result<JwtHeader * JwtPayload, string> =
         let parts = jwt.Split('.')
 
         if parts.Length <> 3 then
             Error "JWT must have exactly 3 parts"
         else
-            let headerJson = parts.[0] |> Crypto.Base64Url.decode encoding |> encoding.utf8Decode
-            let payloadJson = parts.[1] |> Crypto.Base64Url.decode encoding |> encoding.utf8Decode
+            let headerJson = parts.[0] |> Crypto.Base64Url.decode |> Crypto.Utf8.decode
+            let payloadJson = parts.[1] |> Crypto.Base64Url.decode |> Crypto.Utf8.decode
 
             match Decode.fromString headerDecoder headerJson, Decode.fromString payloadDecoder payloadJson with
             | Ok header, Ok payload -> Ok(header, payload)
@@ -133,8 +133,8 @@ module Signature =
     let verify (platform: Platform) (alg: string) (key: obj) (jwt: string) : Async<bool> =
         let parts = jwt.Split('.')
         let signedData = parts.[0] + "." + parts.[1]
-        let signatureBytes = Crypto.Base64Url.decode platform.encoding parts.[2]
-        let dataBytes = platform.encoding.utf8Encode signedData
+        let signatureBytes = Crypto.Base64Url.decode parts.[2]
+        let dataBytes = Crypto.Utf8.encode signedData
         platform.crypto.rsaVerify alg key signatureBytes dataBytes
 
 module Claims =
@@ -174,7 +174,7 @@ module IdToken =
         (jwks: Jwks)
         (jwt: string)
         : Async<Result<JwtPayload, string>> =
-        match Jwt.decode platform.encoding jwt with
+        match Jwt.decode jwt with
         | Error err -> async { return Error err }
         | Ok(header, payload) ->
             match Claims.validate opts issuer nonce nowEpoch header payload with

@@ -40,7 +40,6 @@ let testDiscoveryDoc : DiscoveryDocument =
 let testPlatform (storage: Storage) : Platform =
     let platform =
         { crypto = Browser.crypto
-          encoding = Browser.encoding
           http = Browser.http
           navigation = Browser.navigation
           renewal = Unchecked.defaultof<RenewalStrategy>
@@ -64,8 +63,8 @@ let mockHttp (responses: Map<string, string>) =
             } }
 
 let jsonToBase64Url (json: string) : string =
-    let bytes : byte[] = Fable.Core.JsInterop.emitJsExpr json "new TextEncoder().encode($0)"
-    Elmish.OIDC.Crypto.Base64Url.encode Browser.encoding bytes
+    let bytes = Elmish.OIDC.Crypto.Utf8.encode json
+    Elmish.OIDC.Crypto.Base64Url.encode bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

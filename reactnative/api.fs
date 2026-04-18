@@ -7,7 +7,6 @@ module Api =
     let create (navigation: Navigation) (storage: Storage) (opts: Options) =
         let p =
             { crypto = ReactNative.crypto
-              encoding = ReactNative.encoding
               http = ReactNative.http
               navigation = navigation
               renewal = Unchecked.defaultof<RenewalStrategy>

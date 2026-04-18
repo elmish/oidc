@@ -42,7 +42,7 @@ let mockNavigation () =
     let mutable callbackParams : (string * string) option = None
     let nav =
         { new Navigation with
-            member _.redirect (_url: string) = ()
+            member _.redirect (_url: string) = async { return None }
             member _.getCallbackParams () = callbackParams
             member _.clearCallbackParams () = callbackParams <- None
             member _.encodeURIComponent (s: string) =
@@ -68,7 +68,6 @@ let mockHttp (responses: Map<string, string>) =
 let testPlatform (storage: Storage) : Platform =
     let nav, _ = mockNavigation ()
     { crypto = ReactNative.crypto
-      encoding = ReactNative.encoding
       http = mockHttp Map.empty
       navigation = nav
       renewal = { new RenewalStrategy with member _.renew _ _ _ _ = async { return Error (InvalidToken "not configured") } }
@@ -77,7 +76,6 @@ let testPlatform (storage: Storage) : Platform =
 
 let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : Platform =
     { crypto = ReactNative.crypto
-      encoding = ReactNative.encoding
       http = http
       navigation = nav
       renewal = { new RenewalStrategy with member _.renew _ _ _ _ = async { return Error (InvalidToken "not configured") } }
@@ -85,8 +83,8 @@ let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : P
       timer = ReactNative.timer }
 
 let jsonToBase64Url (json: string) : string =
-    let bytes : byte[] = emitJsExpr json "new TextEncoder().encode($0)"
-    Crypto.Base64Url.encode ReactNative.encoding bytes
+    let bytes = Crypto.Utf8.encode json
+    Crypto.Base64Url.encode bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

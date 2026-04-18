@@ -1,0 +1,12 @@
+{
+  "reactnative.tests/out/reactnative/interop.js": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "reactnative.tests/out/reactnative/reactnative.js": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  }
+}

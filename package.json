@@ -4,9 +4,11 @@
     "type": "module",
     "scripts": {
         "test": "dotnet tool restore && dotnet fable tests/Tests.fsproj -o tests/out && npx mocha --require global-jsdom/register tests/out/Main.js",
-        "test:rn": "dotnet tool restore && dotnet fable reactnative.tests/Tests.fsproj -o reactnative.tests/out && npx mocha reactnative.tests/out/Main.js"
+        "test:rn": "dotnet tool restore && dotnet fable reactnative.tests/Tests.fsproj -o reactnative.tests/out && npm run lint:rn && npx mocha --require ./reactnative.tests/stubs/register.mjs reactnative.tests/out/Main.js",
+        "lint:rn": "eslint reactnative.tests/out/reactnative/"
     },
     "devDependencies": {
+        "eslint": "^10.2.0",
         "global-jsdom": "^29.0.0",
         "jsdom": "^29.0.2",
         "mocha": "^10.8.2"

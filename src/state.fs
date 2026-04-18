@@ -32,10 +32,10 @@ module Login =
         Cmd.OfAsync.either
             (fun () ->
                 async {
-                    let state = Crypto.OAuthState.generate platform.crypto platform.encoding
-                    let nonce = Crypto.Nonce.generate platform.crypto platform.encoding
-                    let verifier = Crypto.CodeVerifier.generate platform.crypto platform.encoding
-                    let! challenge = Crypto.CodeChallenge.compute platform.crypto platform.encoding verifier
+                    let state = Crypto.OAuthState.generate platform.crypto
+                    let nonce = Crypto.Nonce.generate platform.crypto
+                    let verifier = Crypto.CodeVerifier.generate platform.crypto
+                    let! challenge = Crypto.CodeChallenge.compute platform.crypto verifier
                     let authState =
                         { state = state
                           nonce = nonce
@@ -43,14 +43,18 @@ module Login =
                           redirectUri = opts.redirectUri }
                     Storage.AuthState.save platform.storage authState
                     let url = AuthorizeUrl.build platform.navigation doc opts state nonce challenge
-                    platform.navigation.redirect url
-                    // For non-browser platforms, callback params may already be available
-                    match platform.navigation.getCallbackParams () with
+                    let! redirectResult = platform.navigation.redirect url
+                    match redirectResult with
                     | Some (code, callbackState) ->
-                        platform.navigation.clearCallbackParams ()
                         return Some (code, callbackState)
                     | None ->
-                        return None
+                        // Fallback: check callback params (e.g. browser page-reload flow)
+                        match platform.navigation.getCallbackParams () with
+                        | Some (code, callbackState) ->
+                            platform.navigation.clearCallbackParams ()
+                            return Some (code, callbackState)
+                        | None ->
+                            return None
                 })
             ()
             (function
@@ -64,15 +68,18 @@ module Logout =
         let encode = nav.encodeURIComponent
         match doc.endSessionEndpoint, opts.postLogoutRedirectUri with
         | Some endpoint, Some postLogoutUri ->
-            Cmd.OfFunc.attempt
+            Cmd.OfAsync.attempt
                 (fun () ->
-                    let url =
-                        endpoint + "?"
-                        + (match idTokenHint with
-                           | Some token -> "id_token_hint=" + encode token + "&"
-                           | None -> "")
-                        + "post_logout_redirect_uri=" + encode postLogoutUri
-                    nav.redirect url)
+                    async {
+                        let url =
+                            endpoint + "?"
+                            + (match idTokenHint with
+                               | Some token -> "id_token_hint=" + encode token + "&"
+                               | None -> "")
+                            + "post_logout_redirect_uri=" + encode postLogoutUri
+                        let! _ = nav.redirect url
+                        return ()
+                    })
                 ()
                 (fun _ -> LoggedOut)
         | _ ->

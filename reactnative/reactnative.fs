@@ -25,29 +25,15 @@ module ReactNative =
                 }
 
             member _.importRsaKey (key: JwksKey) =
-                let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm key.alg
-                ReactNativeInterop.Crypto.importJwk (key :> obj) rsaAlg.name rsaAlg.hash |> Async.AwaitPromise
+                // RN path does not pre-import: the JWK is consumed directly at verify time
+                // via rnqc.createPublicKey({format:'jwk'}). See ReactNativeInterop.Crypto.verify.
+                async { return key :> obj }
 
             member _.rsaVerify (alg: string) (key: obj) (signature: byte[]) (data: byte[]) =
                 let rsaAlg = Elmish.OIDC.Crypto.rsaAlgorithm alg
                 let saltLength = if rsaAlg.name = "RSA-PSS" then (match rsaAlg.hash with "SHA-256" -> 32 | "SHA-384" -> 48 | _ -> 64) else 0
-                ReactNativeInterop.Crypto.verify key (ReactNativeInterop.Buffers.toArrayBuffer signature) (ReactNativeInterop.Buffers.toArrayBuffer data) rsaAlg.name saltLength
+                ReactNativeInterop.Crypto.verify key signature data rsaAlg.hash saltLength rsaAlg.name
                 |> Async.AwaitPromise }
-
-    let encoding =
-        { new EncodingProvider with
-            member _.utf8Encode (s: string) =
-                let ab : JS.ArrayBuffer = ReactNativeInterop.Encoding.toArrayBuffer s
-                ReactNativeInterop.Buffers.toBytes ab
-
-            member _.utf8Decode (bytes: byte[]) =
-                ReactNativeInterop.Encoding.fromBytes bytes
-
-            member _.base64Encode (bytes: byte[]) =
-                ReactNativeInterop.Encoding.btoaFromBytes bytes
-
-            member _.base64Decode (s: string) =
-                ReactNativeInterop.Encoding.atobToBytes s }
 
     let http =
         { new HttpClient with
@@ -62,9 +48,11 @@ module ReactNative =
             member _.postForm (url: string) (body: string) =
                 async {
                     let! response = ReactNativeInterop.Http.postForm url body |> Async.AwaitPromise
+                    let! text = response.text () |> Async.AwaitPromise
                     if not response.ok then
+                        JS.console.log("postForm error response body:", text)
                         return failwith $"HTTP {response.status} {response.statusText} from POST {url}"
-                    return! response.text () |> Async.AwaitPromise
+                    return text
                 } }
 
     let timer =
@@ -105,7 +93,10 @@ module ReactNative =
             let nav =
                 { new Navigation with
                     member _.redirect (url: string) =
-                        ReactNativeInterop.WebBrowser.openBrowserAsync url |> ignore
+                        async {
+                            ReactNativeInterop.WebBrowser.openBrowserAsync url |> ignore
+                            return None
+                        }
 
                     member _.getCallbackParams () =
                         state.callbackParams
@@ -122,33 +113,44 @@ module ReactNative =
         /// The auth session opens an in-app browser that automatically captures
         /// the redirect and returns code + state via the Promise result.
         let authSession (redirectUri: string) =
-            let state = { callbackParams = None }
 
             let nav =
                 { new Navigation with
                     member _.redirect (url: string) =
-                        ReactNativeInterop.WebBrowser.openAuthSessionAsync url redirectUri
-                        |> Promise.iter (fun (result: ReactNativeInterop.WebBrowser.AuthSessionResult) ->
+                        async {
+                            JS.console.log("authSession.redirect called, url:", url)
+                            JS.console.log("authSession.redirect redirectUri:", redirectUri)
+                            let! result =
+                                ReactNativeInterop.WebBrowser.openAuthSessionAsync url redirectUri
+                                |> Async.AwaitPromise
+                            JS.console.log("openAuthSessionAsync result:", result)
                             if result.``type`` = "success" && not (isNull result.url) then
                                 let urlStr = result.url
                                 match urlStr.IndexOf '?' with
-                                | -1 -> ()
+                                | -1 -> return None
                                 | idx ->
                                     let query = urlStr.Substring idx
                                     let ps = ReactNativeInterop.UrlSearchParams.create query
                                     match ReactNativeInterop.UrlSearchParams.tryGet "code" ps,
                                           ReactNativeInterop.UrlSearchParams.tryGet "state" ps with
                                     | Some code, Some callbackState ->
-                                        state.callbackParams <- Some (code, callbackState)
-                                    | _ -> ())
+                                        return Some (code, callbackState)
+                                    | _ -> return None
+                            else
+                                return None
+                        }
 
                     member _.getCallbackParams () =
-                        state.callbackParams
+                        None
 
                     member _.clearCallbackParams () =
-                        state.callbackParams <- None
+                        ()
 
                     member _.encodeURIComponent (s: string) =
                         ReactNativeInterop.Linking.encodeURIComponent s }
 
             nav
+
+    let ensureCrypto () =
+        if not (ReactNativeInterop.Crypto.isAvailable ()) then
+            failwith "Elmish.OIDC requires the Web Crypto API (globalThis.crypto.subtle), which is not available in the default React Native runtime. Install react-native-quick-crypto and register its polyfill at your app entry point (before importing this library)."

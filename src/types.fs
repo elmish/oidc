@@ -81,18 +81,12 @@ type CryptoProvider =
     abstract importRsaKey: JwksKey -> Async<obj>
     abstract rsaVerify: alg:string -> key:obj -> signature:byte[] -> data:byte[] -> Async<bool>
 
-type EncodingProvider =
-    abstract utf8Encode: string -> byte[]
-    abstract utf8Decode: byte[] -> string
-    abstract base64Encode: byte[] -> string
-    abstract base64Decode: string -> byte[]
-
 type HttpClient =
     abstract getText: string -> Async<string>
     abstract postForm: string -> string -> Async<string>
 
 type Navigation =
-    abstract redirect: string -> unit
+    abstract redirect: string -> Async<(string * string) option>
     abstract getCallbackParams: unit -> (string * string) option
     abstract clearCallbackParams: unit -> unit
     abstract encodeURIComponent: string -> string
@@ -106,7 +100,6 @@ type TimerProvider =
 
 type Platform =
     { crypto: CryptoProvider
-      encoding: EncodingProvider
       http: HttpClient
       navigation: Navigation
       renewal: RenewalStrategy

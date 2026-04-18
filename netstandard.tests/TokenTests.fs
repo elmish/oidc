@@ -6,7 +6,6 @@ open Elmish.OIDC.Types
 open Tests.Helpers
 open Thoth.Json.Net
 
-let private enc = DotNet.encoding
 let private plt = testPlatform (MemoryStorage() :> Storage)
 
 let private validHeader : JwtHeader =
@@ -28,7 +27,7 @@ let tests = testList "Token" [
         testCase "valid JWT decodes header and payload" <| fun _ ->
             let payload = validPayload ()
             let jwt = buildTestJwt validHeader payload
-            match Token.Jwt.decode enc jwt with
+            match Token.Jwt.decode jwt with
             | Ok (header, decoded) ->
                 Expect.equal header.alg "RS256" "alg"
                 Expect.equal header.kid "test-kid-1" "kid"
@@ -40,17 +39,17 @@ let tests = testList "Token" [
                 failwith $"Expected Ok but got Error: {err}"
 
         testCase "rejects JWT with wrong number of segments" <| fun _ ->
-            match Token.Jwt.decode enc "only.two" with
+            match Token.Jwt.decode "only.two" with
             | Error msg -> Expect.isTrue (msg.Contains("3 parts")) "should mention 3 parts"
             | Ok _ -> failwith "Expected error for malformed JWT"
 
         testCase "rejects single segment" <| fun _ ->
-            match Token.Jwt.decode enc "nodotsatall" with
+            match Token.Jwt.decode "nodotsatall" with
             | Error _ -> ()
             | Ok _ -> failwith "Expected error for single segment"
 
         testCase "rejects four segments" <| fun _ ->
-            match Token.Jwt.decode enc "a.b.c.d" with
+            match Token.Jwt.decode "a.b.c.d" with
             | Error _ -> ()
             | Ok _ -> failwith "Expected error for four segments"
 
@@ -59,7 +58,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":"{testOptions.clientId}","exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match Token.Jwt.decode enc jwt with
+            match Token.Jwt.decode jwt with
             | Ok (_, payload) ->
                 Expect.equal payload.aud [ testOptions.clientId ] "single aud string should decode to list"
             | Error err ->
@@ -70,7 +69,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":["{testOptions.clientId}","other-client"],"exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match Token.Jwt.decode enc jwt with
+            match Token.Jwt.decode jwt with
             | Ok (_, p) ->
                 Expect.equal p.aud.Length 2 "should have two audiences"
                 Expect.isTrue (p.aud |> List.contains testOptions.clientId) "should contain our client"
@@ -81,7 +80,7 @@ let tests = testList "Token" [
             let now = nowEpoch ()
             let payloadJson = $"""{{"iss":"{testOptions.authority}","sub":"user-123","aud":"{testOptions.clientId}","exp":{now + 3600L},"iat":{now - 10L}}}"""
             let jwt = buildJwt headerJson payloadJson "sig"
-            match Token.Jwt.decode enc jwt with
+            match Token.Jwt.decode jwt with
             | Ok (_, p) -> Expect.isNone p.nonce "missing nonce should be None"
             | Error err -> failwith $"Expected Ok: {err}"
     ]

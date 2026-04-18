@@ -42,7 +42,7 @@ let mockNavigation () =
     let mutable callbackParams : (string * string) option = None
     let nav =
         { new Navigation with
-            member _.redirect (_url: string) = ()
+            member _.redirect (_url: string) = async { return None }
             member _.getCallbackParams () = callbackParams
             member _.clearCallbackParams () = callbackParams <- None
             member _.encodeURIComponent (s: string) = Uri.EscapeDataString s }
@@ -67,7 +67,6 @@ let mockHttp (responses: Map<string, string>) =
 let testPlatform (storage: Storage) : Platform =
     let nav, _ = mockNavigation ()
     { crypto = DotNet.crypto
-      encoding = DotNet.encoding
       http = mockHttp Map.empty
       navigation = nav
       renewal = { new RenewalStrategy with member _.renew _ _ _ _ = async { return Error (InvalidToken "not configured") } }
@@ -76,7 +75,6 @@ let testPlatform (storage: Storage) : Platform =
 
 let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : Platform =
     { crypto = DotNet.crypto
-      encoding = DotNet.encoding
       http = http
       navigation = nav
       renewal = { new RenewalStrategy with member _.renew _ _ _ _ = async { return Error (InvalidToken "not configured") } }
@@ -85,7 +83,7 @@ let testPlatformWith (storage: Storage) (http: HttpClient) (nav: Navigation) : P
 
 let jsonToBase64Url (json: string) : string =
     let bytes = Text.Encoding.UTF8.GetBytes json
-    Crypto.Base64Url.encode DotNet.encoding bytes
+    Crypto.Base64Url.encode bytes
 
 let buildJwt (headerJson: string) (payloadJson: string) (signature: string) : string =
     let header = jsonToBase64Url headerJson

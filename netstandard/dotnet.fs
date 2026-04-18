@@ -26,8 +26,8 @@ module DotNet =
             member _.importRsaKey (key: JwksKey) =
                 async {
                     let rsa = RSA.Create()
-                    let nBytes = Convert.FromBase64String(Crypto.Base64Url.toBase64 key.n)
-                    let eBytes = Convert.FromBase64String(Crypto.Base64Url.toBase64 key.e)
+                    let nBytes = Crypto.Base64Url.decode key.n
+                    let eBytes = Crypto.Base64Url.decode key.e
                     rsa.ImportParameters(RSAParameters(Modulus = nBytes, Exponent = eBytes))
                     return rsa :> obj
                 }
@@ -47,20 +47,6 @@ module DotNet =
                         else RSASignaturePadding.Pkcs1
                     return rsa.VerifyData(data, signature, hashAlg, padding)
                 } }
-
-    let encoding =
-        { new EncodingProvider with
-            member _.utf8Encode (s: string) =
-                Encoding.UTF8.GetBytes s
-
-            member _.utf8Decode (bytes: byte[]) =
-                Encoding.UTF8.GetString bytes
-
-            member _.base64Encode (bytes: byte[]) =
-                Convert.ToBase64String bytes
-
-            member _.base64Decode (s: string) =
-                Convert.FromBase64String s }
 
     let http =
         let client = new System.Net.Http.HttpClient()
@@ -139,42 +125,45 @@ module DotNet =
         /// Creates a Navigation that uses RFC 8252 loopback redirect.
         /// `redirect` opens the system browser and starts an HttpListener on localhost to capture the callback.
         let loopback (port: int) =
-            let state = { callbackParams = None }
             let redirectUri = $"http://127.0.0.1:{port}/"
 
             { new Navigation with
                 member _.redirect (url: string) =
-                    // Start listener before opening browser
-                    let listener = new HttpListener()
-                    listener.Prefixes.Add(redirectUri)
-                    listener.Start()
+                    async {
+                        // Start listener before opening browser
+                        let listener = new HttpListener()
+                        listener.Prefixes.Add(redirectUri)
+                        listener.Start()
 
-                    // Open system browser
-                    Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore
+                        // Open system browser
+                        Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore
 
-                    // Wait synchronously for the callback (runs on Elmish async dispatch)
-                    let context = listener.GetContext()
-                    let query = context.Request.QueryString
-                    let code = query.["code"]
-                    let callbackState = query.["state"]
+                        // Wait for the callback
+                        let! context = listener.GetContextAsync() |> Async.AwaitTask
+                        let query = context.Request.QueryString
+                        let code = query.["code"]
+                        let callbackState = query.["state"]
 
-                    // Send response to browser
-                    let response = context.Response
-                    let body = Text.Encoding.UTF8.GetBytes("<html><body>Authentication complete. You can close this window.</body></html>")
-                    response.ContentType <- "text/html"
-                    response.ContentLength64 <- int64 body.Length
-                    response.OutputStream.Write(body, 0, body.Length)
-                    response.Close()
-                    listener.Stop()
+                        // Send response to browser
+                        let response = context.Response
+                        let body = Text.Encoding.UTF8.GetBytes("<html><body>Authentication complete. You can close this window.</body></html>")
+                        response.ContentType <- "text/html"
+                        response.ContentLength64 <- int64 body.Length
+                        response.OutputStream.Write(body, 0, body.Length)
+                        response.Close()
+                        listener.Stop()
 
-                    if not (isNull code) && not (isNull callbackState) then
-                        state.callbackParams <- Some (code, callbackState)
+                        if not (isNull code) && not (isNull callbackState) then
+                            return Some (code, callbackState)
+                        else
+                            return None
+                    }
 
                 member _.getCallbackParams () =
-                    state.callbackParams
+                    None
 
                 member _.clearCallbackParams () =
-                    state.callbackParams <- None
+                    ()
 
                 member _.encodeURIComponent (s: string) =
                     Uri.EscapeDataString s }
@@ -187,7 +176,10 @@ module DotNet =
             let nav =
                 { new Navigation with
                     member _.redirect (url: string) =
-                        Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore
+                        async {
+                            Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore
+                            return None
+                        }
 
                     member _.getCallbackParams () =
                         state.callbackParams

@@ -8,25 +8,34 @@ module Crypto =
     [<Emit("globalThis.crypto.getRandomValues($0)")>]
     let getRandomValues (_buf: byte[]) : byte[] = jsNative
 
-    [<Emit("globalThis.crypto.subtle.importKey('jwk', {kty: $0.kty, n: $0.n, e: $0.e, alg: $0.alg, ext: true}, {name: $1, hash: $2}, false, ['verify'])")>]
-    let importJwk (_key: obj) (_algName: string) (_hashName: string) : JS.Promise<obj> = jsNative
+    // RSA verify via react-native-quick-crypto's Node-style API.
+    // RNQC v0.7's SubtleCrypto.verify has RSA entirely commented out (only ECDSA works).
+    // RNQC's createPublicKey({format:'jwk'}) is also broken (isJwk path commented out).
+    // Working path: subtle.importKey (JWK→CryptoKey) → subtle.exportKey('spki') → DER buffer
+    // → createVerify with {key: derBuf, format:'der', type:'spki'}.
+    [<ImportAll("react-native-quick-crypto")>]
+    let private rnqc : obj = jsNative
 
-    [<Emit("globalThis.crypto.subtle.verify($3 === 'RSA-PSS' ? {name: 'RSA-PSS', saltLength: $4} : $3, $0, $1, $2)")>]
-    let verify (_key: obj) (_signature: JS.ArrayBuffer) (_data: JS.ArrayBuffer) (_algName: string) (_saltLength: int) : JS.Promise<bool> = jsNative
+    [<Emit("""(function(rnqc, jwkIn, sigIn, dataIn, hashAlg, saltLen, algNameIn) {
+    var B = globalThis.Buffer;
+    var jwk2 = {kty: jwkIn.kty, n: jwkIn.n, e: jwkIn.e, alg: jwkIn.alg, ext: true};
+    return globalThis.crypto.subtle.importKey('jwk', jwk2, {name: algNameIn, hash: hashAlg}, true, ['verify'])
+        .then(function(cryptoKey) { return globalThis.crypto.subtle.exportKey('spki', cryptoKey); })
+        .then(function(spkiBuf) {
+            var verifier = rnqc.createVerify(hashAlg.replace('-', ''));
+            verifier.update(B.from(new Uint8Array(dataIn)));
+            var keyOpts = {key: B.from(spkiBuf), format: 'der', type: 'spki'};
+            if (saltLen > 0) { keyOpts.padding = rnqc.constants.RSA_PKCS1_PSS_PADDING; keyOpts.saltLength = saltLen; }
+            return verifier.verify(keyOpts, B.from(new Uint8Array(sigIn)));
+        });
+})($6, $0, $1, $2, $3, $4, $5)""")>]
+    let private verifyImpl (_jwk: obj) (_signature: byte[]) (_data: byte[]) (_hashAlg: string) (_saltLength: int) (_algName: string) (_rnqc: obj) : JS.Promise<bool> = jsNative
 
-module Encoding =
+    let verify (jwk: obj) (signature: byte[]) (data: byte[]) (hashAlg: string) (saltLength: int) (algName: string) : JS.Promise<bool> =
+        verifyImpl jwk signature data hashAlg saltLength algName rnqc
 
-    [<Emit("new TextEncoder().encode($0).buffer")>]
-    let toArrayBuffer (_s: string) : JS.ArrayBuffer = jsNative
-
-    [<Emit("new TextDecoder().decode($0)")>]
-    let fromBytes (_bytes: byte[]) : string = jsNative
-
-    [<Emit("btoa(String.fromCharCode.apply(null, $0))")>]
-    let btoaFromBytes (_bytes: byte[]) : string = jsNative
-
-    [<Emit("Uint8Array.from(atob($0), function(c) { return c.charCodeAt(0); })")>]
-    let atobToBytes (_s: string) : byte[] = jsNative
+    [<Emit("(typeof globalThis !== 'undefined' && globalThis.crypto != null && globalThis.crypto.subtle != null)")>]
+    let isAvailable () : bool = jsNative
 
 module Buffers =
 
